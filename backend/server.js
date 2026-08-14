@@ -1,38 +1,204 @@
 const express = require('express');
 const mongoose = require('mongoose');
-const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
+const http = require('http');
+const { Server } = require('socket.io');
+const cron = require('node-cron');
 require('dotenv').config();
 
 const app = express();
+const server = http.createServer(app);
 
-// ✅ CORS - أبسط حل
-app.use(cors());
-app.use(express.json());
+// ============================================
+// ✅ MIDDLEWARE CORS المخصص (الحل النهائي)
+// ============================================
+app.use((req, res, next) => {
+    // 1. تحديد الأصول المسموح بها
+    const allowedOrigins = [
+        'https://resussite-qcms-eight.vercel.app',
+        'https://resussite-qcms-fgowx4acr-nouhalabdis-projects.vercel.app',
+        'https://resussite-qcms.vercel.app',
+        'http://localhost:3000'
+    ];
+    const origin = req.headers.origin;
+
+    // 2. التحقق من الأصل والسماح به
+    if (allowedOrigins.includes(origin)) {
+        res.setHeader('Access-Control-Allow-Origin', origin);
+    } else {
+        // السماح مؤقتاً لجميع الأصول لتشخيص المشكلة (يمكنك تقييده لاحقاً)
+        res.setHeader('Access-Control-Allow-Origin', '*');
+    }
+
+    // 3. إعداد باقي رؤوس CORS
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+    // 4. معالجة طلبات OPTIONS (preflight) مباشرة وإرجاع 200
+    if (req.method === 'OPTIONS') {
+        console.log('🟡 OPTINS request received for:', req.url);
+        return res.status(200).end();
+    }
+
+    next();
+});
+
+app.use(express.json({ limit: '50mb' }));
 
 // ✅ مسار اختبار
 app.get('/api/test', (req, res) => {
-  res.json({ status: 'ok', message: 'Server is running!' });
+  res.json({ 
+    status: 'ok', 
+    message: 'Server is running!',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // ✅ الاتصال بقاعدة البيانات
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('✅ MongoDB Connected!'))
+  .then(() => console.log('✅ MongoDB Connected Successfully!'))
   .catch(err => console.log('❌ MongoDB Error:', err));
 
-// ✅ المسارات
-app.use('/api/auth', require('./routes/authRoutes'));
-app.use('/api/modules', require('./routes/moduleRoutes'));
-app.use('/api/lessons', require('./routes/lessonRoutes'));
-app.use('/api/exams', require('./routes/examRoutes'));
-app.use('/api/users', require('./routes/userRoutes'));
-app.use('/api/stats', require('./routes/statsRoutes'));
-app.use('/api/quizzes', require('./routes/quizRoutes'));
-app.use('/api/community', require('./routes/communityRoutes'));
-app.use('/api/upload', require('./routes/uploadRoutes'));
-app.use('/api/notifications', require('./routes/notificationRoutes'));
+// ✅ مجلد uploads
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log('📁 Dossier uploads créé');
+}
 
+app.use('/uploads', express.static(uploadsDir, {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.pdf')) {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'inline');
+    }
+  }
+}));
+
+// مسار للتحقق من الملفات
+app.get('/api/check-file/:filename', (req, res) => {
+  const filePath = path.join(uploadsDir, req.params.filename);
+  if (fs.existsSync(filePath)) {
+    res.json({ 
+      exists: true, 
+      path: filePath,
+      size: fs.statSync(filePath).size 
+    });
+  } else {
+    res.json({ exists: false });
+  }
+});
+
+// ✅ Socket.io
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST'],
+    credentials: true
+  }
+});
+
+io.on('connection', (socket) => {
+  console.log('🟢 Client connecté:', socket.id);
+
+  socket.on('join-user', (userId) => {
+    if (!userId) return;
+    socket.join(`user-${userId}`);
+    console.log(`👤 Socket ${socket.id} rejoint user-${userId}`);
+  });
+
+  socket.on('join-room', (conversationId) => {
+    socket.join(conversationId);
+    console.log(`🔗 Socket ${socket.id} a rejoint la room ${conversationId}`);
+  });
+
+  socket.on('leave-room', (conversationId) => {
+    socket.leave(conversationId);
+  });
+
+  socket.on('disconnect', () => {
+    console.log('🔴 Client déconnecté:', socket.id);
+  });
+});
+
+app.set('io', io);
+
+// ✅ Import des routes
+const authRoutes = require('./routes/authRoutes');
+const moduleRoutes = require('./routes/moduleRoutes');
+const lessonRoutes = require('./routes/lessonRoutes');
+const examRoutes = require('./routes/examRoutes');
+const userRoutes = require('./routes/userRoutes');
+const statsRoutes = require('./routes/statsRoutes');
+const quizRoutes = require('./routes/quizRoutes');
+const communityRoutes = require('./routes/communityRoutes');
+const uploadRoutes = require('./routes/uploadRoutes');
+const notificationRoutes = require('./routes/notificationRoutes');
+
+// ✅ Utilisation des routes
+app.use('/api/auth', authRoutes);
+app.use('/api/modules', moduleRoutes);
+app.use('/api/lessons', lessonRoutes);
+app.use('/api/exams', examRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/stats', statsRoutes);
+app.use('/api/quizzes', quizRoutes);
+app.use('/api/community', communityRoutes);
+app.use('/api/upload', uploadRoutes);
+app.use('/api/notifications', notificationRoutes);
+
+app.use('/uploads', express.static(uploadsDir));
+
+// ✅ مهمة مجدولة (Cron Job) - To-Do List
+const User = require('./models/User');
+const { notifyUser } = require('./utils/notify');
+
+cron.schedule('*/15 * * * *', async () => {
+  try {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const users = await User.find({
+      todoList: {
+        $elemMatch: {
+          date: { $gte: startOfDay, $lte: endOfDay },
+          done: false,
+          notified: false
+        }
+      }
+    });
+
+    for (const user of users) {
+      const dueTasks = user.todoList.filter(t =>
+        t.date >= startOfDay && t.date <= endOfDay && !t.done && !t.notified
+      );
+      if (dueTasks.length === 0) continue;
+
+      console.log(`📤 Envoi rappel To-Do à user-${user._id}`);
+      await notifyUser(io, user._id, {
+        title: 'Rappel To-Do List',
+        body: dueTasks.length === 1
+          ? `Rappel : "${dueTasks[0].text}" est prévu aujourd'hui 📝`
+          : `Vous avez ${dueTasks.length} tâche(s) prévue(s) aujourd'hui 📝`,
+        conversationType: 'system',
+        conversationTitle: 'Rappel To-Do List'
+      });
+
+      dueTasks.forEach(t => { t.notified = true; });
+      await user.save();
+    }
+  } catch (err) {
+    console.error('❌ Erreur job cron to-do list :', err);
+  }
+});
+
+// ✅ Démarrer le serveur
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+server.listen(PORT, () => {
+  console.log(`🚀 Backend Server running on http://localhost:${PORT}`);
+  console.log(`📁 Uploads directory: ${uploadsDir}`);
 });
