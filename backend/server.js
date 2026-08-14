@@ -11,53 +11,52 @@ require('dotenv').config();
 const app = express();
 const server = http.createServer(app);
 
-// ✅ إعداد CORS بشكل صحيح وآمن
-const allowedOrigins = [
-  'https://resussite-qcms-jozudt9jl-nouhalabdis-projects.vercel.app',
-  'https://resussite-qcms.vercel.app',
-  'http://localhost:3000',
-  'http://localhost:3001'
-];
-
-// ✅ استخدم cors middleware فقط
-app.use(cors({
-  origin: function (origin, callback) {
-    // السماح للطلبات بدون origin (مثل Postman)
-    if (!origin) return callback(null, true);
-    // للتشخيص، نسمح لكل الأصول مؤقتاً
-    callback(null, true);
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  credentials: true
-}));
-
-// ✅ معالجة OPTIONS يدوياً بدلاً من app.options('*', cors())
+// ✅ ===== حل CORS النهائي =====
+// Middleware مخصص لـ CORS
 app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  
   if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    console.log('🟡 OPTIONS request:', req.url);
     return res.sendStatus(200);
   }
   next();
 });
 
+// CORS middleware إضافي
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
+
 app.use(express.json({ limit: '50mb' }));
+
+// ✅ مسار اختبار
+app.get('/api/test', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    message: 'CORS is working!',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // ✅ الاتصال بقاعدة البيانات
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB Connected Successfully!'))
   .catch(err => console.log('❌ MongoDB Error:', err));
 
-// ✅ إنشاء مجلد uploads إذا لم يكن موجوداً
+// ✅ إنشاء مجلد uploads
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
   console.log('📁 Dossier uploads créé');
 }
 
-// ✅ تقديم الملفات الثابتة
 app.use('/uploads', express.static(uploadsDir, {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.pdf')) {
@@ -67,30 +66,17 @@ app.use('/uploads', express.static(uploadsDir, {
   }
 }));
 
-// ✅ مسار اختبار
-app.get('/api/test', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    message: 'Server is running!',
-    timestamp: new Date().toISOString()
-  });
-});
-
 // ✅ مسار للتحقق من الملفات
 app.get('/api/check-file/:filename', (req, res) => {
   const filePath = path.join(uploadsDir, req.params.filename);
   if (fs.existsSync(filePath)) {
-    res.json({ 
-      exists: true, 
-      path: filePath,
-      size: fs.statSync(filePath).size 
-    });
+    res.json({ exists: true, path: filePath, size: fs.statSync(filePath).size });
   } else {
     res.json({ exists: false });
   }
 });
 
-// ✅ إدارة اتصالات Socket.io
+// ✅ Socket.io
 const io = new Server(server, {
   cors: {
     origin: '*',
@@ -101,22 +87,18 @@ const io = new Server(server, {
 
 io.on('connection', (socket) => {
   console.log('🟢 Client connecté:', socket.id);
-
   socket.on('join-user', (userId) => {
     if (!userId) return;
     socket.join(`user-${userId}`);
-    console.log(`👤 Socket ${socket.id} rejoint sa room utilisateur: user-${userId}`);
+    console.log(`👤 Socket ${socket.id} rejoint user-${userId}`);
   });
-
   socket.on('join-room', (conversationId) => {
     socket.join(conversationId);
     console.log(`🔗 Socket ${socket.id} a rejoint la room ${conversationId}`);
   });
-
   socket.on('leave-room', (conversationId) => {
     socket.leave(conversationId);
   });
-
   socket.on('disconnect', () => {
     console.log('🔴 Client déconnecté:', socket.id);
   });
@@ -152,7 +134,7 @@ app.use('/uploads', express.static(uploadsDir));
 const User = require('./models/User');
 const { notifyUser } = require('./utils/notify');
 
-// ✅ مهمة مجدولة لإشعارات To-Do List
+// ✅ مهمة مجدولة
 cron.schedule('*/15 * * * *', async () => {
   try {
     const startOfDay = new Date();
@@ -176,7 +158,6 @@ cron.schedule('*/15 * * * *', async () => {
       );
       if (dueTasks.length === 0) continue;
 
-      console.log(`📤 Envoi rappel To-Do à user-${user._id}`);
       await notifyUser(io, user._id, {
         title: 'Rappel To-Do List',
         body: dueTasks.length === 1
@@ -190,7 +171,7 @@ cron.schedule('*/15 * * * *', async () => {
       await user.save();
     }
   } catch (err) {
-    console.error('❌ Erreur job cron to-do list :', err);
+    console.error('❌ Erreur job cron:', err);
   }
 });
 
