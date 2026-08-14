@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 const http = require('http');
 const { Server } = require('socket.io');
 const cron = require('node-cron');
@@ -21,9 +22,41 @@ const io = new Server(server, {
 app.use(cors());
 app.use(express.json({ limit: '50mb' }));
 
+// ✅ الاتصال بقاعدة البيانات
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB Connected Successfully!'))
   .catch(err => console.log('❌ MongoDB Error:', err));
+
+// ✅ إنشاء مجلد uploads إذا لم يكن موجوداً
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log('📁 Dossier uploads créé');
+}
+
+// ✅ تقديم الملفات الثابتة من مجلد uploads
+app.use('/uploads', express.static(uploadsDir, {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.pdf')) {
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'inline');
+    }
+  }
+}));
+
+// ✅ مسار للتحقق من الملفات (للتشخيص)
+app.get('/api/check-file/:filename', (req, res) => {
+  const filePath = path.join(uploadsDir, req.params.filename);
+  if (fs.existsSync(filePath)) {
+    res.json({ 
+      exists: true, 
+      path: filePath,
+      size: fs.statSync(filePath).size 
+    });
+  } else {
+    res.json({ exists: false });
+  }
+});
 
 // ✅ إدارة اتصالات Socket.io
 io.on('connection', (socket) => {
@@ -74,9 +107,8 @@ app.use('/api/community', communityRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/notifications', notificationRoutes);
 
-// ✅ لم نعد بحاجة لـ /uploads لأن الملفات على Cloudinary
-// لكن نحتفظ بالمسار في حالة وجود ملفات قديمة
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+// ✅ تأكد من وجود هذا السطر بعد routes
+app.use('/uploads', express.static(uploadsDir));
 
 const User = require('./models/User');
 const { notifyUser } = require('./utils/notify');
@@ -126,4 +158,5 @@ cron.schedule('*/15 * * * *', async () => {
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🚀 Backend Server running on http://localhost:${PORT}`);
+  console.log(`📁 Uploads directory: ${uploadsDir}`);
 });
