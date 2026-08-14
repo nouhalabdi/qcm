@@ -12,9 +12,6 @@ const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    // ✅ قبل كان مقيد بـ "http://localhost:3000" بركة - أي بورت آخر (3001، شبكة محلية، إلخ)
-    // كان الاتصال يترفض بصمت (connect_error فـ console بلا أي تنبيه)، فـ الإشعارات
-    // ما توصلش خالص. دابا نقبلو origin ديناميكي (نعكسو نفس الأصل ديال الطلب).
     origin: true,
     methods: ["GET", "POST"],
     credentials: true
@@ -32,7 +29,6 @@ mongoose.connect(process.env.MONGO_URI)
 io.on('connection', (socket) => {
   console.log('🟢 Client connecté:', socket.id);
 
-  // ✅ المستخدم ينضم إلى غرفته الخاصة (user-...)
   socket.on('join-user', (userId) => {
     if (!userId) return;
     socket.join(`user-${userId}`);
@@ -77,6 +73,9 @@ app.use('/api/quizzes', quizRoutes);
 app.use('/api/community', communityRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/notifications', notificationRoutes);
+
+// ✅ لم نعد بحاجة لـ /uploads لأن الملفات على Cloudinary
+// لكن نحتفظ بالمسار في حالة وجود ملفات قديمة
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const User = require('./models/User');
