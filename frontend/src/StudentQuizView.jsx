@@ -13,7 +13,7 @@ function StudentQuizView() {
   const moduleIdFromState = location.state?.moduleId;
   const user = JSON.parse(localStorage.getItem('user'));
 
-  // États principaux (inchangés)
+  // États principaux
   const [quiz, setQuiz] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -42,7 +42,7 @@ function StudentQuizView() {
   const [isFavorite, setIsFavorite] = useState(false);
   const [togglingFavorite, setTogglingFavorite] = useState(false);
 
-  // Chargement du quiz (inchangé)
+  // Chargement du quiz
   useEffect(() => {
     const fetchQuiz = async () => {
       try {
@@ -98,7 +98,7 @@ function StudentQuizView() {
     fetchQuiz();
   }, [quizId, user?._id]);
 
-  // Gestion du timer (inchangé)
+  // Gestion du timer
   useEffect(() => {
     if (timeLeft === 0 || isFinished || isReviewMode) return;
     const timer = setInterval(() => {
@@ -114,7 +114,48 @@ function StudentQuizView() {
     return () => clearInterval(timer);
   }, [timeLeft, isFinished, isReviewMode]);
 
-  // Fonctions de gestion des réponses (inchangées)
+  // ✅ Fonction handleFinish avec timeTaken
+  const handleFinish = async () => {
+    if (isReviewMode) return;
+
+    let correctCount = 0;
+    quiz.questions.forEach((q, idx) => {
+      if (selectedAnswers[idx] === q.correctAnswer) correctCount++;
+    });
+    setScore(correctCount);
+    setIsFinished(true);
+
+    // ✅ حساب الوقت المستغرق
+    let timeSpent = 0;
+    if (startTime) {
+      timeSpent = Math.floor((Date.now() - startTime) / 1000);
+    }
+    console.log('⏱️ Temps passé:', timeSpent, 'secondes');
+
+    setIsSaving(true);
+    try {
+      const res = await fetch('https://reussite-qcms.onrender.com/api/users/quiz-result', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: user._id,
+          quizId,
+          type: quiz.type === 'simulation' ? 'module' : quiz.type,
+          score: Math.round((correctCount / quiz.questions.length) * 100),
+          timeTaken: timeSpent // ✅ تأكد من إرسال هذا الحقل
+        })
+      });
+      const data = await res.json();
+      console.log('✅ Score enregistré:', data);
+    } catch (e) {
+      console.error("❌ Erreur lors de la sauvegarde du score", e);
+    } finally {
+      setIsSaving(false);
+    }
+    setIsFirstAttempt(false);
+  };
+
+  // Fonctions de gestion des réponses
   const handleAnswer = (option) => {
     if (isFinished || isReviewMode) return;
     setSelectedAnswers(prev => ({ ...prev, [currentQuestionIndex]: option }));
@@ -153,43 +194,6 @@ function StudentQuizView() {
     } else {
       handleFinish();
     }
-  };
-
-  const handleFinish = async () => {
-    if (isReviewMode) return;
-
-    let correctCount = 0;
-    quiz.questions.forEach((q, idx) => {
-      if (selectedAnswers[idx] === q.correctAnswer) correctCount++;
-    });
-    setScore(correctCount);
-    setIsFinished(true);
-
-    let timeSpent = 0;
-    if (startTime) {
-      timeSpent = Math.floor((Date.now() - startTime) / 1000);
-    }
-
-    setIsSaving(true);
-    try {
-      const res = await fetch('https://reussite-qcms.onrender.com/api/users/quiz-result', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user._id,
-          quizId,
-          type: quiz.type === 'simulation' ? 'module' : quiz.type,
-          score: Math.round((correctCount / quiz.questions.length) * 100),
-          timeTaken: timeSpent
-        })
-      });
-      await res.json();
-    } catch (e) {
-      console.error("Erreur lors de la sauvegarde du score", e);
-    } finally {
-      setIsSaving(false);
-    }
-    setIsFirstAttempt(false);
   };
 
   const openChat = async () => {
@@ -292,7 +296,6 @@ function StudentQuizView() {
 
   const effectiveCorrectionMode = (quiz.type !== 'lesson' && isPracticeMode) ? 'immediate' : quiz.correctionMode;
 
-  // ✅ تعديل البادينج هنا ليكون متجاوباً
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-3 sm:p-6 flex items-center justify-center">
       <div className="w-full max-w-4xl bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-4 sm:p-6 border border-slate-200 dark:border-slate-700 relative">

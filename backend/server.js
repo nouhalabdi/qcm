@@ -34,7 +34,7 @@ if (!fs.existsSync(uploadsDir)) {
   console.log('📁 Dossier uploads créé');
 }
 
-// ✅ تقديم الملفات الثابتة من مجلد uploads
+// ✅ تقديم الملفات الثابتة من مجلد uploads مع HTTPS
 app.use('/uploads', express.static(uploadsDir, {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.pdf')) {

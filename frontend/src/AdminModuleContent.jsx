@@ -436,7 +436,12 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
 
   // ✅ الدالة المصححة - بدون علامة اقتباس زائدة
   const fetchQuizzes = async () => {
-    if (!targetId) return;
+    if (!targetId) {
+      setQuizzes([]);
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
     try {
       let url;
@@ -449,10 +454,18 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
       console.log('🔍 Fetching quizzes:', url);
       
       const res = await fetch(url);
+      
+      if (!res.ok) {
+        console.error(`❌ Server responded with ${res.status}`);
+        setQuizzes([]);
+        setLoading(false);
+        return;
+      }
+      
       const data = await res.json();
       setQuizzes(data);
     } catch (err) {
-      console.error('❌ Erreur fetchQuizzes:', err);
+      console.error('❌ Network error:', err);
       setQuizzes([]);
     }
     setLoading(false);
@@ -469,10 +482,12 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
 
   const openNewBuilder = () => {
     const fresh = blankQuiz(type);
-if (type === 'lesson') {
-  fresh.lessonId = targetId;
-  fresh.moduleId = moduleIdProp;   
-}
+    if (type === 'lesson') {
+      fresh.lessonId = targetId;
+      fresh.moduleId = moduleIdProp;
+    } else if (type === 'module') {
+      fresh.moduleId = targetId;
+    }
     setEditingQuiz(fresh);
     setView('builder');
   };
