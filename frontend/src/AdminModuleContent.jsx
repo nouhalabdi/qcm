@@ -434,35 +434,68 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
   const [loading, setLoading] = useState(false);
   const [editingQuiz, setEditingQuiz] = useState(null);
 
+  // ✅ الدالة المصححة لجلب QCMs
   const fetchQuizzes = async () => {
-    if (!targetId) return;
+    if (!targetId) {
+      setQuizzes([]);
+      setLoading(false);
+      return;
+    }
+    
     setLoading(true);
     try {
-      const param = type === 'lesson' ? `lessonId=${targetId}` : `moduleId=${targetId}&type=module`;
-      const res = await fetch(`https://reussite-qcms.onrender.com/api/quizzes'?${param}`);
-      const data = await res.json();
-      setQuizzes(data);
+      // ✅ بناء URL بدون علامات اقتباس زائدة
+      let url;
+      if (type === 'lesson') {
+        url = `https://reussite-qcms.onrender.com/api/quizzes?lessonId=${targetId}`;
+      } else {
+        url = `https://reussite-qcms.onrender.com/api/quizzes?moduleId=${targetId}&type=module`;
+      }
+      
+      console.log('🔍 Fetching quizzes:', url); // للتشخيص
+      
+      const res = await fetch(url);
+      
+      // ✅ التحقق من الاستجابة
+      if (!res.ok) {
+        console.error(`❌ Server responded with ${res.status}`);
+        setQuizzes([]);
+        setLoading(false);
+        return;
+      }
+      
+      // ✅ معالجة JSON بشكل آمن
+      const text = await res.text();
+      try {
+        const data = JSON.parse(text);
+        setQuizzes(data);
+      } catch (parseError) {
+        console.error('❌ Invalid JSON:', text.substring(0, 200));
+        setQuizzes([]);
+      }
     } catch (err) {
-      console.error(err);
+      console.error('❌ Network error:', err);
+      setQuizzes([]);
     }
     setLoading(false);
   };
 
+  // ✅ استدعاء عند فتح المودال أو تغيير targetId
   useEffect(() => {
     if (isOpen) {
       setView('list');
       fetchQuizzes();
     }
-  }, [isOpen, targetId]);
+  }, [isOpen, targetId, type]); // ✅ إضافة type كـ dependency
 
   if (!isOpen) return null;
 
   const openNewBuilder = () => {
     const fresh = blankQuiz(type);
-if (type === 'lesson') {
-  fresh.lessonId = targetId;
-  fresh.moduleId = moduleIdProp;   
-}
+    if (type === 'lesson') {
+      fresh.lessonId = targetId;
+      fresh.moduleId = moduleIdProp;   
+    }
     setEditingQuiz(fresh);
     setView('builder');
   };
@@ -1038,14 +1071,14 @@ function AdminModuleContent() {
 
       {/* Modal QCM */}
       <QuizModal 
-  isOpen={quizModal.open} 
-  onClose={() => setQuizModal({ ...quizModal, open: false })} 
-  type={quizModal.type} 
-  targetId={quizModal.targetId} 
-  targetLabel={quizModal.targetLabel} 
-  uploadFile={uploadFile} 
-  moduleIdProp={moduleId}   // <--- هذا السطر الجديد
-/>
+        isOpen={quizModal.open} 
+        onClose={() => setQuizModal({ ...quizModal, open: false })} 
+        type={quizModal.type} 
+        targetId={quizModal.targetId} 
+        targetLabel={quizModal.targetLabel} 
+        uploadFile={uploadFile} 
+        moduleIdProp={moduleId}
+      />
 
       {/* Modal d'édition de leçon */}
       {isEditModalOpen && editForm && (
