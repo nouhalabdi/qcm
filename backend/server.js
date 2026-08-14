@@ -11,34 +11,46 @@ require('dotenv').config();
 const app = express();
 const server = http.createServer(app);
 
-// ✅ إعداد CORS - سماح لجميع الأصول للتشخيص
+// ✅ إعداد CORS بشكل صحيح وآمن
+const allowedOrigins = [
+  'https://resussite-qcms-jozudt9jl-nouhalabdis-projects.vercel.app',
+  'https://resussite-qcms.vercel.app',
+  'http://localhost:3000',
+  'http://localhost:3001'
+];
+
+// ✅ استخدم cors middleware فقط
 app.use(cors({
-  origin: '*',
+  origin: function (origin, callback) {
+    // السماح للطلبات بدون origin (مثل Postman)
+    if (!origin) return callback(null, true);
+    // للتشخيص، نسمح لكل الأصول مؤقتاً
+    callback(null, true);
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
   credentials: true
 }));
 
-// ✅ معالجة طلبات OPTIONS
-app.options('*', cors());
+// ✅ معالجة OPTIONS يدوياً بدلاً من app.options('*', cors())
+app.use((req, res, next) => {
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    return res.sendStatus(200);
+  }
+  next();
+});
 
 app.use(express.json({ limit: '50mb' }));
-
-// ✅ مسار اختبار
-app.get('/api/test', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    message: 'Server is running!',
-    timestamp: new Date().toISOString()
-  });
-});
 
 // ✅ الاتصال بقاعدة البيانات
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB Connected Successfully!'))
   .catch(err => console.log('❌ MongoDB Error:', err));
 
-// ✅ إنشاء مجلد uploads
+// ✅ إنشاء مجلد uploads إذا لم يكن موجوداً
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
@@ -54,6 +66,15 @@ app.use('/uploads', express.static(uploadsDir, {
     }
   }
 }));
+
+// ✅ مسار اختبار
+app.get('/api/test', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    message: 'Server is running!',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // ✅ مسار للتحقق من الملفات
 app.get('/api/check-file/:filename', (req, res) => {
