@@ -21,7 +21,7 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   
-  // ✅ معالجة OPTIONS مباشرة وإرجاع 200
+  // ✅ معالجة OPTIONS مباشرة
   if (req.method === 'OPTIONS') {
     console.log('🟡 OPTIONS request:', req.url);
     return res.status(200).end();
@@ -30,7 +30,7 @@ app.use((req, res, next) => {
   next();
 });
 
-// ✅ CORS middleware إضافي للتأكد
+// ✅ CORS middleware إضافي
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -41,23 +41,14 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 
 // ✅ ================================================
-// ✅ مسارات الاختبار
+// ✅ مسار اختبار
 // ✅ ================================================
-
-// مسار اختبار بسيط
 app.get('/api/test', (req, res) => {
   res.json({ 
     status: 'ok', 
     message: 'Server is running!',
     timestamp: new Date().toISOString()
   });
-});
-
-// مسار اختبار CORS
-app.options('/api/test', (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.status(200).end();
 });
 
 // ✅ ================================================
