@@ -11,30 +11,41 @@ require('dotenv').config();
 const app = express();
 const server = http.createServer(app);
 
-const io = new Server(server, {
-  cors: {
-    origin: true,
-    methods: ["GET", "POST"],
-    credentials: true
-  }
-});
+// ✅ إعداد CORS - سماح لجميع الأصول للتشخيص
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true
+}));
 
-app.use(cors());
+// ✅ معالجة طلبات OPTIONS
+app.options('*', cors());
+
 app.use(express.json({ limit: '50mb' }));
+
+// ✅ مسار اختبار
+app.get('/api/test', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    message: 'Server is running!',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // ✅ الاتصال بقاعدة البيانات
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB Connected Successfully!'))
   .catch(err => console.log('❌ MongoDB Error:', err));
 
-// ✅ إنشاء مجلد uploads إذا لم يكن موجوداً
+// ✅ إنشاء مجلد uploads
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
   console.log('📁 Dossier uploads créé');
 }
 
-// ✅ تقديم الملفات الثابتة من مجلد uploads مع HTTPS
+// ✅ تقديم الملفات الثابتة
 app.use('/uploads', express.static(uploadsDir, {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.pdf')) {
@@ -44,7 +55,7 @@ app.use('/uploads', express.static(uploadsDir, {
   }
 }));
 
-// ✅ مسار للتحقق من الملفات (للتشخيص)
+// ✅ مسار للتحقق من الملفات
 app.get('/api/check-file/:filename', (req, res) => {
   const filePath = path.join(uploadsDir, req.params.filename);
   if (fs.existsSync(filePath)) {
@@ -59,6 +70,14 @@ app.get('/api/check-file/:filename', (req, res) => {
 });
 
 // ✅ إدارة اتصالات Socket.io
+const io = new Server(server, {
+  cors: {
+    origin: '*',
+    methods: ['GET', 'POST'],
+    credentials: true
+  }
+});
+
 io.on('connection', (socket) => {
   console.log('🟢 Client connecté:', socket.id);
 
@@ -107,7 +126,6 @@ app.use('/api/community', communityRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/notifications', notificationRoutes);
 
-// ✅ تأكد من وجود هذا السطر بعد routes
 app.use('/uploads', express.static(uploadsDir));
 
 const User = require('./models/User');
