@@ -196,7 +196,7 @@ function Auth() {
                     onChange={handleChange}
                     className="w-full px-3 py-2 border border-gray-200 dark:border-slate-600 rounded-lg bg-gray-50 dark:bg-slate-900 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition text-sm"
                   >
-                    <option value="">Choisir votre année</option>
+                    <option value="">Choisir Votre année</option>
                     <option value="1ère Année">1ère Année</option>
                     <option value="2ème Année">2ème Année</option>
                     <option value="3ème Année">3ème Année</option>
