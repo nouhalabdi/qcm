@@ -1,20 +1,27 @@
 const express = require('express');
 const multer = require('multer');
-const path = require('path');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const router = express.Router();
 
-// إعداد التخزين (حفظ الملفات في مجلد uploads)
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'uploads/');
-  },
-  filename: (req, file, cb) => {
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(file.originalname));
+// ✅ Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+// ✅ Configure Cloudinary Storage
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'uploads',
+    allowed_formats: ['jpg', 'png', 'jpeg', 'gif', 'pdf', 'mp4', 'webm', 'mov', 'avi'],
+    resource_type: 'auto' // ✅ Allows images, videos, and PDFs
   }
 });
 
-// ✅ فلترة أوسع: أي نوع صورة، فيديو، أو PDF (بدل قائمة مغلقة كانت ترفض فيديوهات كتيرة)
+// ✅ File filter (optional, but keeps your logic)
 const fileFilter = (req, file, cb) => {
   const isPdf = file.mimetype === 'application/pdf';
   const isImage = file.mimetype.startsWith('image/');
@@ -29,23 +36,23 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
-  limits: { fileSize: 1024 * 1024 * 1024 } // ✅ 1 جيجا بدل 50 ميجا (كافي لفيديوهات الدروس)
+  limits: { fileSize: 1024 * 1024 * 1024 } // 1GB
 });
 
-// مسار رفع ملف واحد
+// ✅ Upload route
 router.post('/', upload.single('file'), (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'Aucun fichier reçu ou type non autorisé.' });
     }
-    const fileUrl = `${req.protocol}://${req.get('host')}/uploads/${req.file.filename}`;
-    res.json({ url: fileUrl });
+    // ✅ Cloudinary returns the URL directly
+    res.json({ url: req.file.path });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
 });
 
-// ✅ معالج أخطاء Multer (حجم كبير جداً، نوع مرفوض...) - يرجع JSON بدل صفحة HTML
+// ✅ Multer error handler
 router.use((err, req, res, next) => {
   if (err instanceof multer.MulterError || err) {
     return res.status(400).json({ error: err.message });

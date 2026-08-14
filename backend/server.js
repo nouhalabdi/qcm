@@ -7,14 +7,19 @@ const { Server } = require('socket.io');
 const cron = require('node-cron');
 require('dotenv').config();
 
+// ✅ Cloudinary configuration (added)
+const cloudinary = require('cloudinary').v2;
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
 const app = express();
 const server = http.createServer(app);
 
 const io = new Server(server, {
   cors: {
-    // ✅ قبل كان مقيد بـ "http://localhost:3000" بركة - أي بورت آخر (3001، شبكة محلية، إلخ)
-    // كان الاتصال يترفض بصمت (connect_error فـ console بلا أي تنبيه)، فـ الإشعارات
-    // ما توصلش خالص. دابا نقبلو origin ديناميكي (نعكسو نفس الأصل ديال الطلب).
     origin: true,
     methods: ["GET", "POST"],
     credentials: true
@@ -28,11 +33,10 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB Connected Successfully!'))
   .catch(err => console.log('❌ MongoDB Error:', err));
 
-// ✅ إدارة اتصالات Socket.io
+// ✅ Socket.io connection
 io.on('connection', (socket) => {
   console.log('🟢 Client connecté:', socket.id);
 
-  // ✅ المستخدم ينضم إلى غرفته الخاصة (user-...)
   socket.on('join-user', (userId) => {
     if (!userId) return;
     socket.join(`user-${userId}`);
@@ -77,12 +81,13 @@ app.use('/api/quizzes', quizRoutes);
 app.use('/api/community', communityRoutes);
 app.use('/api/upload', uploadRoutes);
 app.use('/api/notifications', notificationRoutes);
-app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// ❌ REMOVED: app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const User = require('./models/User');
 const { notifyUser } = require('./utils/notify');
 
-// ✅ مهمة مجدولة لإشعارات To-Do List
+// ✅ Cron job for To-Do List notifications
 cron.schedule('*/15 * * * *', async () => {
   try {
     const startOfDay = new Date();
