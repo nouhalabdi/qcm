@@ -434,17 +434,11 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
   const [loading, setLoading] = useState(false);
   const [editingQuiz, setEditingQuiz] = useState(null);
 
-  // ✅ الدالة المصححة لجلب QCMs
+  // ✅ الدالة المصححة - بدون علامة اقتباس زائدة
   const fetchQuizzes = async () => {
-    if (!targetId) {
-      setQuizzes([]);
-      setLoading(false);
-      return;
-    }
-    
+    if (!targetId) return;
     setLoading(true);
     try {
-      // ✅ بناء URL بدون علامات اقتباس زائدة
       let url;
       if (type === 'lesson') {
         url = `https://reussite-qcms.onrender.com/api/quizzes?lessonId=${targetId}`;
@@ -452,50 +446,33 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
         url = `https://reussite-qcms.onrender.com/api/quizzes?moduleId=${targetId}&type=module`;
       }
       
-      console.log('🔍 Fetching quizzes:', url); // للتشخيص
+      console.log('🔍 Fetching quizzes:', url);
       
       const res = await fetch(url);
-      
-      // ✅ التحقق من الاستجابة
-      if (!res.ok) {
-        console.error(`❌ Server responded with ${res.status}`);
-        setQuizzes([]);
-        setLoading(false);
-        return;
-      }
-      
-      // ✅ معالجة JSON بشكل آمن
-      const text = await res.text();
-      try {
-        const data = JSON.parse(text);
-        setQuizzes(data);
-      } catch (parseError) {
-        console.error('❌ Invalid JSON:', text.substring(0, 200));
-        setQuizzes([]);
-      }
+      const data = await res.json();
+      setQuizzes(data);
     } catch (err) {
-      console.error('❌ Network error:', err);
+      console.error('❌ Erreur fetchQuizzes:', err);
       setQuizzes([]);
     }
     setLoading(false);
   };
 
-  // ✅ استدعاء عند فتح المودال أو تغيير targetId
   useEffect(() => {
     if (isOpen) {
       setView('list');
       fetchQuizzes();
     }
-  }, [isOpen, targetId, type]); // ✅ إضافة type كـ dependency
+  }, [isOpen, targetId, type]);
 
   if (!isOpen) return null;
 
   const openNewBuilder = () => {
     const fresh = blankQuiz(type);
-    if (type === 'lesson') {
-      fresh.lessonId = targetId;
-      fresh.moduleId = moduleIdProp;   
-    }
+if (type === 'lesson') {
+  fresh.lessonId = targetId;
+  fresh.moduleId = moduleIdProp;   
+}
     setEditingQuiz(fresh);
     setView('builder');
   };
