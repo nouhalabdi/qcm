@@ -92,7 +92,7 @@ function PdfAnnotatorModal({
     }
     (async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/users/annotation?userId=${userId}&fileUrl=${encodeURIComponent(fileUrl)}`);
+        const res = await fetch(`https://reussite-qcms.onrender.com/api/users/annotation?userId=${userId}&fileUrl=${encodeURIComponent(fileUrl)}`);
         const data = await res.json();
         if (mountedRef.current && data && typeof data === 'object') {
           setAllStrokes(data);
@@ -220,7 +220,7 @@ function PdfAnnotatorModal({
 
     setSaving(true);
     try {
-      const res = await fetch('http://localhost:5000/api/users/annotation', {
+      const res = await fetch('https://reussite-qcms.onrender.com/api/users/annotation', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -300,7 +300,7 @@ function PdfAnnotatorModal({
 
       const formData = new FormData();
       formData.append('file', file);
-      const uploadRes = await fetch('http://localhost:5000/api/upload', {
+      const uploadRes = await fetch('https://reussite-qcms.onrender.com/api/upload', {
         method: 'POST',
         body: formData
       });
@@ -324,7 +324,7 @@ function PdfAnnotatorModal({
     if (!modifiedUrl) return;
 
     try {
-      const res = await fetch('http://localhost:5000/api/users/custom-file', {
+      const res = await fetch('https://reussite-qcms.onrender.com/api/users/custom-file', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -41,7 +41,7 @@ function StudentProgress() {
 
     const fetchStats = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/users/profile/stats?userId=${user._id}`);
+        const res = await fetch(`https://reussite-qcms.onrender.com/api/users/profile/stats?userId=${user._id}`);
         if (!res.ok) throw new Error('Erreur serveur');
         const data = await res.json();
 
@@ -93,19 +93,19 @@ function StudentProgress() {
     if (!user || !user.year) return;
     const fetchExtraData = async () => {
       try {
-        const modulesRes = await fetch(`http://localhost:5000/api/modules?year=${user.year}`);
+        const modulesRes = await fetch(`https://reussite-qcms.onrender.com/api/modules?year=${user.year}`);
         const modulesData = await modulesRes.json();
         setAllModules(modulesData);
 
         const lessonsPromises = modulesData.map(mod =>
-          fetch(`http://localhost:5000/api/lessons?moduleId=${mod._id}`).then(r => r.json())
+          fetch(`https://reussite-qcms.onrender.com/api/lessons?moduleId=${mod._id}`).then(r => r.json())
         );
         const lessonsArrays = await Promise.all(lessonsPromises);
         const allLessonsData = lessonsArrays.flat();
         setAllLessons(allLessonsData);
 
         const quizzesPromises = modulesData.map(mod =>
-          fetch(`http://localhost:5000/api/quizzes?moduleId=${mod._id}`).then(r => r.json())
+          fetch(`https://reussite-qcms.onrender.com/api/quizzes?moduleId=${mod._id}`).then(r => r.json())
         );
         const quizzesArrays = await Promise.all(quizzesPromises);
         const allQuizzesData = quizzesArrays.flat();

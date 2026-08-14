@@ -46,7 +46,7 @@ function Auth() {
       : { username: formData.name, email: formData.email, password: formData.password, year: formData.year };
 
     try {
-      const response = await fetch(`http://localhost:5000/api/auth/${endpoint}`, {
+      const response = await fetch(`https://reussite-qcms.onrender.com/api/auth/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -86,7 +86,7 @@ function Auth() {
       
       const deviceId = getDeviceId(); // ✅ توليد المعرف الفريد
       
-      const response = await fetch('http://localhost:5000/api/auth/google', {
+      const response = await fetch('https://reussite-qcms.onrender.com/api/auth/google', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

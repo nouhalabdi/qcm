@@ -9,7 +9,7 @@ function AdminStudents() {
   const fetchStudents = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await fetch('http://localhost:5000/api/users');
+      const res = await fetch('https://reussite-qcms.onrender.com/api/users');
       const data = await res.json();
       setStudents(data);
     } catch (err) {
@@ -25,7 +25,7 @@ function AdminStudents() {
 
   const toggleSubscription = async (userId, currentStatus) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/users/${userId}`, {
+      const res = await fetch(`https://reussite-qcms.onrender.com/api/users/${userId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isSubscribed: !currentStatus })

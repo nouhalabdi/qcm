@@ -82,7 +82,7 @@ function AppContent({ darkMode, toggleDarkMode, user }) {
     if (socketRef.current) return;
 
     console.log('🔌 Connexion à Socket.io...');
-    const newSocket = io('http://localhost:5000');
+    const newSocket = io('https://reussite-qcms.onrender.com');
     socketRef.current = newSocket;
 
     const joinUser = () => {
@@ -132,7 +132,7 @@ function AppContent({ darkMode, toggleDarkMode, user }) {
     if (!user || !user._id) return;
     (async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/notifications?userId=${user._id}`);
+        const res = await fetch(`https://reussite-qcms.onrender.com/api/notifications?userId=${user._id}`);
         const data = await res.json();
         const mapped = data.map(n => ({
           id: n._id,
@@ -156,7 +156,7 @@ function AppContent({ darkMode, toggleDarkMode, user }) {
       localStorage.setItem('notifications', JSON.stringify(newNotifs));
       return newNotifs;
     });
-    fetch(`http://localhost:5000/api/notifications/${id}`, { method: 'DELETE' }).catch(() => {});
+    fetch(`https://reussite-qcms.onrender.com/api/notifications/${id}`, { method: 'DELETE' }).catch(() => {});
   };
 
   const handleNotificationItemClick = (notif) => {
@@ -255,7 +255,7 @@ function App() {
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token && user) {
-      fetch('http://localhost:5000/api/auth/me', {
+      fetch('https://reussite-qcms.onrender.com/api/auth/me', {
         headers: { 'Authorization': `Bearer ${token}` }
       })
       .then(res => {

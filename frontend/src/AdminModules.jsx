@@ -23,7 +23,7 @@ function AdminModules() {
   // Récupération des modules
   const fetchModules = useCallback(async () => {
     try {
-      const res = await fetch(`http://localhost:5000/api/modules?year=${filters.year}&semester=${filters.semester}`);
+      const res = await fetch(`https://reussite-qcms.onrender.com/api/modules?year=${filters.year}&semester=${filters.semester}`);
       const data = await res.json();
       setModules(data);
     } catch (err) {
@@ -39,7 +39,7 @@ function AdminModules() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch('http://localhost:5000/api/modules', {
+      const res = await fetch('https://reussite-qcms.onrender.com/api/modules', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form)
@@ -65,7 +65,7 @@ function AdminModules() {
   const handleDelete = async (moduleId) => {
     if (!window.confirm('Voulez-vous vraiment supprimer ce module ?')) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/modules/${moduleId}`, { method: 'DELETE' });
+      const res = await fetch(`https://reussite-qcms.onrender.com/api/modules/${moduleId}`, { method: 'DELETE' });
       if (res.ok) {
         alert('Module supprimé avec succès !');
         await fetchModules();
@@ -81,7 +81,7 @@ function AdminModules() {
   const handleModuleEditSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`http://localhost:5000/api/modules/${editingModule._id}`, {
+      const res = await fetch(`https://reussite-qcms.onrender.com/api/modules/${editingModule._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editingModule)

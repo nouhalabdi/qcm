@@ -14,7 +14,7 @@ function StudentCourseView() {
     const fetchModules = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`http://localhost:5000/api/modules?year=${studentYear}&semester=${semester}`);
+        const res = await fetch(`https://reussite-qcms.onrender.com/api/modules?year=${studentYear}&semester=${semester}`);
         const data = await res.json();
         setModules(data);
       } catch (err) {

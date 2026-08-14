@@ -23,7 +23,7 @@ function StudentSimulation() {
     const fetchModules = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`http://localhost:5000/api/modules?year=${studentYear}&semester=${semester}`);
+        const res = await fetch(`https://reussite-qcms.onrender.com/api/modules?year=${studentYear}&semester=${semester}`);
         const data = await res.json();
         setModules(data);
         setSelectedModule(null);
@@ -42,7 +42,7 @@ function StudentSimulation() {
     if (!user) return;
     const fetchCompleted = async () => {
       try {
-        const res = await fetch(`http://localhost:5000/api/users/profile/stats?userId=${user._id}`);
+        const res = await fetch(`https://reussite-qcms.onrender.com/api/users/profile/stats?userId=${user._id}`);
         const data = await res.json();
         const completedIds = (data.completedQuizzes || []).map(q => String(q.quizId?._id || q.quizId));
         setCompletedQuizIds(completedIds);
@@ -57,7 +57,7 @@ function StudentSimulation() {
   const handleSelectModule = async (moduleId) => {
     setLoading(true);
     try {
-      const res = await fetch(`http://localhost:5000/api/quizzes?moduleId=${moduleId}&type=simulation`);
+      const res = await fetch(`https://reussite-qcms.onrender.com/api/quizzes?moduleId=${moduleId}&type=simulation`);
       const data = await res.json();
       setSimulations(data);
       setSelectedModule(moduleId);
@@ -74,7 +74,7 @@ function StudentSimulation() {
   // جلب الترتيب (Modal)
   const fetchRanking = async (quizId) => {
     try {
-      const res = await fetch(`http://localhost:5000/api/quizzes/${quizId}/ranking`);
+      const res = await fetch(`https://reussite-qcms.onrender.com/api/quizzes/${quizId}/ranking`);
       const data = await res.json();
       setRankings(prev => ({ ...prev, [quizId]: data }));
       setSelectedRankingQuiz(quizId);

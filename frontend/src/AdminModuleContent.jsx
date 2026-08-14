@@ -439,7 +439,7 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
     setLoading(true);
     try {
       const param = type === 'lesson' ? `lessonId=${targetId}` : `moduleId=${targetId}&type=module`;
-      const res = await fetch(`http://localhost:5000/api/quizzes?${param}`);
+      const res = await fetch(`https://reussite-qcms.onrender.com/api/quizzes'?${param}`);
       const data = await res.json();
       setQuizzes(data);
     } catch (err) {
@@ -489,7 +489,7 @@ if (type === 'lesson') {
       delete payload._id;
       const isEdit = !!editingQuiz._id;
       const res = await fetch(
-        isEdit ? `http://localhost:5000/api/quizzes/${editingQuiz._id}` : 'http://localhost:5000/api/quizzes',
+        isEdit ? `https://reussite-qcms.onrender.com/api/quizzes/${editingQuiz._id}` : 'https://reussite-qcms.onrender.com/api/quizzes',
         {
           method: isEdit ? 'PUT' : 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -512,7 +512,7 @@ if (type === 'lesson') {
   const handleDeleteQuiz = async (quizId) => {
     if (!window.confirm('Supprimer ce QCM ?')) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/quizzes/${quizId}`, { method: 'DELETE' });
+      const res = await fetch(`https://reussite-qcms.onrender.com/api/quizzes/${quizId}`, { method: 'DELETE' });
       if (res.ok) {
         await fetchQuizzes();
       } else {
@@ -654,7 +654,7 @@ function AdminModuleContent() {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      const res = await fetch('http://localhost:5000/api/upload', { method: 'POST', body: formData });
+      const res = await fetch('https://reussite-qcms.onrender.com/api/upload', { method: 'POST', body: formData });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
         alert(`Erreur : ${errData.error || 'fichier trop volumineux'}`);
@@ -671,7 +671,7 @@ function AdminModuleContent() {
 
   const fetchLessons = async () => {
     try {
-      const lesRes = await fetch(`http://localhost:5000/api/lessons?moduleId=${moduleId}`);
+      const lesRes = await fetch(`https://reussite-qcms.onrender.com/api/lessons?moduleId=${moduleId}`);
       const lesData = await lesRes.json();
       setLessons(lesData);
     } catch (err) {
@@ -682,7 +682,7 @@ function AdminModuleContent() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const modRes = await fetch(`http://localhost:5000/api/modules/${moduleId}`);
+        const modRes = await fetch(`https://reussite-qcms.onrender.com/api/modules/${moduleId}`);
         const modData = await modRes.json();
         setModuleTitle(modData.title);
         await fetchLessons();
@@ -793,7 +793,7 @@ function AdminModuleContent() {
     }
     try {
       const yearContentsArray = form.selectedYears.map(year => ({ year, versions: form.yearContents[year] }));
-      const res = await fetch('http://localhost:5000/api/lessons', {
+      const res = await fetch('https://reussite-qcms.onrender.com/api/lessons', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: form.title, order: form.order, moduleId, yearContents: yearContentsArray })
@@ -882,7 +882,7 @@ function AdminModuleContent() {
   const handleEditSubmit = async (e) => {
     e.preventDefault();
     try {
-      const res = await fetch(`http://localhost:5000/api/lessons/${editForm._id}`, {
+      const res = await fetch(`https://reussite-qcms.onrender.com/api/lessons/${editForm._id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editForm)
@@ -903,7 +903,7 @@ function AdminModuleContent() {
   const handleDeleteLesson = async (lessonId) => {
     if (!window.confirm('Supprimer cette leçon ?')) return;
     try {
-      const res = await fetch(`http://localhost:5000/api/lessons/${lessonId}`, { method: 'DELETE' });
+      const res = await fetch(`https://reussite-qcms.onrender.com/api/lessons/${lessonId}`, { method: 'DELETE' });
       if (res.ok) {
         alert('Leçon supprimée !');
         await fetchLessons();
