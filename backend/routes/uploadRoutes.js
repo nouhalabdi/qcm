@@ -34,11 +34,11 @@ router.post('/', upload.single('file'), (req, res) => {
     }
     
     // Cloudinary يعيد URL مباشرة
-    console.log('📁 Fichier uploadé sur Cloudinary:', req.file.filename);
+    console.log(' Fichier uploadé sur Cloudinary:', req.file.filename);
     res.json({ url: req.file.path });
     
   } catch (err) {
-    console.error('❌ Erreur upload:', err);
+    console.error('Erreur upload:', err);
     res.status(500).json({ error: err.message });
   }
 });
