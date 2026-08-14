@@ -23,7 +23,6 @@ function Auth() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  // ✅ دالة لتوليد أو استرجاع معرف فريد للجهاز
   const getDeviceId = () => {
     let deviceId = localStorage.getItem('device_id');
     if (!deviceId) {
@@ -39,10 +38,10 @@ function Auth() {
     setLoading(true);
 
     const endpoint = isLogin ? 'login' : 'register';
-    const deviceId = getDeviceId(); // ✅ توليد المعرف الفريد
+    const deviceId = getDeviceId();
 
     const body = isLogin 
-      ? { email: formData.email, password: formData.password, deviceId } // ✅ إرسال المعرف
+      ? { email: formData.email, password: formData.password, deviceId }
       : { username: formData.name, email: formData.email, password: formData.password, year: formData.year };
 
     try {
@@ -84,7 +83,7 @@ function Auth() {
       setLoading(true);
       const userData = await signInWithGoogle();
       
-      const deviceId = getDeviceId(); // ✅ توليد المعرف الفريد
+      const deviceId = getDeviceId();
       
       const response = await fetch('https://reussite-qcms.onrender.com/api/auth/google', {
         method: 'POST',
@@ -92,7 +91,7 @@ function Auth() {
         body: JSON.stringify({
           email: userData.email,
           displayName: userData.displayName,
-          deviceId // ✅ إرسال المعرف أيضاً
+          deviceId
         })
       });
 
@@ -163,16 +162,40 @@ function Auth() {
             <button onClick={() => setIsLogin(false)} className={`flex-1 py-2 rounded-full text-xs font-medium transition-all duration-300 ${!isLogin ? 'bg-white dark:bg-slate-800 shadow-md text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}>Inscription</button>
           </div>
           {error && (<div className="mb-3 p-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-xs border border-red-200 dark:border-red-800">{error}</div>)}
+          
+          {/* ✅ النموذج المصحح */}
           <form onSubmit={handleSubmit} className="space-y-3">
             {!isLogin && (
               <>
                 <div>
-                  <label className="block text-[10px] font-semibold text-gray-600 dark:text-gray-300 mb-1 uppercase tracking-wider">Nom complet</label>
-                  <input type="text" name="name" required value={formData.name} onChange={handleChange} className="w-full px-3 py-2 border border-gray-200 dark:border-slate-600 rounded-lg bg-gray-50 dark:bg-slate-900 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition placeholder:text-gray-400 text-sm" placeholder="Entrez votre nom" />
+                  <label htmlFor="name" className="block text-[10px] font-semibold text-gray-600 dark:text-gray-300 mb-1 uppercase tracking-wider">
+                    Nom complet
+                  </label>
+                  <input
+                    id="name"
+                    type="text"
+                    name="name"
+                    autoComplete="name"
+                    required
+                    value={formData.name}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-slate-600 rounded-lg bg-gray-50 dark:bg-slate-900 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition placeholder:text-gray-400 text-sm"
+                    placeholder="Entrez votre nom"
+                  />
                 </div>
                 <div>
-                  <label className="block text-[10px] font-semibold text-gray-600 dark:text-gray-300 mb-1 uppercase tracking-wider">Année d'étude</label>
-                  <select name="year" required value={formData.year} onChange={handleChange} className="w-full px-3 py-2 border border-gray-200 dark:border-slate-600 rounded-lg bg-gray-50 dark:bg-slate-900 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition text-sm">
+                  <label htmlFor="year" className="block text-[10px] font-semibold text-gray-600 dark:text-gray-300 mb-1 uppercase tracking-wider">
+                    Année d'étude
+                  </label>
+                  <select
+                    id="year"
+                    name="year"
+                    autoComplete="off"
+                    required
+                    value={formData.year}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-slate-600 rounded-lg bg-gray-50 dark:bg-slate-900 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition text-sm"
+                  >
                     <option value="">Choisir votre année</option>
                     <option value="1ère Année">1ère Année</option>
                     <option value="2ème Année">2ème Année</option>
@@ -184,15 +207,46 @@ function Auth() {
               </>
             )}
             <div>
-              <label className="block text-[10px] font-semibold text-gray-600 dark:text-gray-300 mb-1 uppercase tracking-wider">Email</label>
-              <input type="email" name="email" required value={formData.email} onChange={handleChange} className="w-full px-3 py-2 border border-gray-200 dark:border-slate-600 rounded-lg bg-gray-50 dark:bg-slate-900 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition placeholder:text-gray-400 text-sm" placeholder="exemple@gmail.com" />
+              <label htmlFor="email" className="block text-[10px] font-semibold text-gray-600 dark:text-gray-300 mb-1 uppercase tracking-wider">
+                Email
+              </label>
+              <input
+                id="email"
+                type="email"
+                name="email"
+                autoComplete="email"
+                required
+                value={formData.email}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-200 dark:border-slate-600 rounded-lg bg-gray-50 dark:bg-slate-900 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition placeholder:text-gray-400 text-sm"
+                placeholder="exemple@gmail.com"
+              />
             </div>
             <div>
-              <label className="block text-[10px] font-semibold text-gray-600 dark:text-gray-300 mb-1 uppercase tracking-wider">Mot de passe</label>
-              <input type="password" name="password" required value={formData.password} onChange={handleChange} className="w-full px-3 py-2 border border-gray-200 dark:border-slate-600 rounded-lg bg-gray-50 dark:bg-slate-900 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition placeholder:text-gray-400 text-sm" placeholder="••••••••" />
+              <label htmlFor="password" className="block text-[10px] font-semibold text-gray-600 dark:text-gray-300 mb-1 uppercase tracking-wider">
+                Mot de passe
+              </label>
+              <input
+                id="password"
+                type="password"
+                name="password"
+                autoComplete={isLogin ? "current-password" : "new-password"}
+                required
+                value={formData.password}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-200 dark:border-slate-600 rounded-lg bg-gray-50 dark:bg-slate-900 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition placeholder:text-gray-400 text-sm"
+                placeholder="••••••••"
+              />
             </div>
-            <button type="submit" disabled={loading} className={`w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-md transition-all duration-300 shadow-blue-600/20 text-sm ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}>{loading ? 'Chargement...' : isLogin ? 'Se connecter' : 'Créer mon compte'}</button>
+            <button
+              type="submit"
+              disabled={loading}
+              className={`w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-md transition-all duration-300 shadow-blue-600/20 text-sm ${loading ? 'opacity-70 cursor-not-allowed' : ''}`}
+            >
+              {loading ? 'Chargement...' : isLogin ? 'Se connecter' : 'Créer mon compte'}
+            </button>
           </form>
+
           <div className="mt-4 relative">
             <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-gray-200 dark:border-slate-600"></div></div>
             <div className="relative flex justify-center text-xs"><span className="px-3 bg-white dark:bg-slate-800 text-gray-400">OU</span></div>
