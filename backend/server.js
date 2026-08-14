@@ -11,19 +11,24 @@ require('dotenv').config();
 const app = express();
 const server = http.createServer(app);
 
-// ✅ ===== حل CORS النهائي =====
+// ✅ ================================================
+// ✅ CORS - الحل النهائي (بدون app.options('*'))
+// ✅ ================================================
 app.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  // السماح لجميع الأصول
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
   
+  // معالجة طلبات OPTIONS (preflight)
   if (req.method === 'OPTIONS') {
     return res.sendStatus(200);
   }
   next();
 });
 
+// CORS middleware إضافي
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -33,7 +38,11 @@ app.use(cors({
 
 app.use(express.json({ limit: '50mb' }));
 
-// ✅ مسار اختبار
+// ✅ ================================================
+// ✅ مسارات الاختبار (ضعها قبل routes الأخرى)
+// ✅ ================================================
+
+// مسار اختبار بسيط
 app.get('/api/test', (req, res) => {
   res.json({ 
     status: 'ok', 
@@ -42,12 +51,23 @@ app.get('/api/test', (req, res) => {
   });
 });
 
+// مسار اختبار CORS
+app.options('/api/test', (req, res) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.sendStatus(200);
+});
+
+// ✅ ================================================
 // ✅ الاتصال بقاعدة البيانات
+// ✅ ================================================
 mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB Connected Successfully!'))
   .catch(err => console.log('❌ MongoDB Error:', err));
 
-// ✅ إنشاء مجلد uploads
+// ✅ ================================================
+// ✅ مجلد uploads
+// ✅ ================================================
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
@@ -63,17 +83,23 @@ app.use('/uploads', express.static(uploadsDir, {
   }
 }));
 
-// ✅ مسار للتحقق من الملفات
+// مسار للتحقق من الملفات
 app.get('/api/check-file/:filename', (req, res) => {
   const filePath = path.join(uploadsDir, req.params.filename);
   if (fs.existsSync(filePath)) {
-    res.json({ exists: true, path: filePath, size: fs.statSync(filePath).size });
+    res.json({ 
+      exists: true, 
+      path: filePath,
+      size: fs.statSync(filePath).size 
+    });
   } else {
     res.json({ exists: false });
   }
 });
 
+// ✅ ================================================
 // ✅ Socket.io
+// ✅ ================================================
 const io = new Server(server, {
   cors: {
     origin: '*',
@@ -84,18 +110,22 @@ const io = new Server(server, {
 
 io.on('connection', (socket) => {
   console.log('🟢 Client connecté:', socket.id);
+
   socket.on('join-user', (userId) => {
     if (!userId) return;
     socket.join(`user-${userId}`);
     console.log(`👤 Socket ${socket.id} rejoint user-${userId}`);
   });
+
   socket.on('join-room', (conversationId) => {
     socket.join(conversationId);
     console.log(`🔗 Socket ${socket.id} a rejoint la room ${conversationId}`);
   });
+
   socket.on('leave-room', (conversationId) => {
     socket.leave(conversationId);
   });
+
   socket.on('disconnect', () => {
     console.log('🔴 Client déconnecté:', socket.id);
   });
@@ -103,7 +133,9 @@ io.on('connection', (socket) => {
 
 app.set('io', io);
 
-// Import des routes
+// ✅ ================================================
+// ✅ Import des routes
+// ✅ ================================================
 const authRoutes = require('./routes/authRoutes');
 const moduleRoutes = require('./routes/moduleRoutes');
 const lessonRoutes = require('./routes/lessonRoutes');
@@ -115,6 +147,9 @@ const communityRoutes = require('./routes/communityRoutes');
 const uploadRoutes = require('./routes/uploadRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 
+// ✅ ================================================
+// ✅ Utilisation des routes
+// ✅ ================================================
 app.use('/api/auth', authRoutes);
 app.use('/api/modules', moduleRoutes);
 app.use('/api/lessons', lessonRoutes);
@@ -128,10 +163,12 @@ app.use('/api/notifications', notificationRoutes);
 
 app.use('/uploads', express.static(uploadsDir));
 
+// ✅ ================================================
+// ✅ مهمة مجدولة (Cron Job) - To-Do List
+// ✅ ================================================
 const User = require('./models/User');
 const { notifyUser } = require('./utils/notify');
 
-// ✅ مهمة مجدولة
 cron.schedule('*/15 * * * *', async () => {
   try {
     const startOfDay = new Date();
@@ -155,6 +192,7 @@ cron.schedule('*/15 * * * *', async () => {
       );
       if (dueTasks.length === 0) continue;
 
+      console.log(`📤 Envoi rappel To-Do à user-${user._id}`);
       await notifyUser(io, user._id, {
         title: 'Rappel To-Do List',
         body: dueTasks.length === 1
@@ -168,10 +206,13 @@ cron.schedule('*/15 * * * *', async () => {
       await user.save();
     }
   } catch (err) {
-    console.error('❌ Erreur job cron:', err);
+    console.error('❌ Erreur job cron to-do list :', err);
   }
 });
 
+// ✅ ================================================
+// ✅ Démarrer le serveur
+// ✅ ================================================
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`🚀 Backend Server running on http://localhost:${PORT}`);
