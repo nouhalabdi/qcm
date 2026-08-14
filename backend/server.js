@@ -12,23 +12,25 @@ const app = express();
 const server = http.createServer(app);
 
 // ✅ ================================================
-// ✅ CORS - الحل النهائي (بدون app.options('*'))
+// ✅ CORS - الحل النهائي 100%
 // ✅ ================================================
 app.use((req, res, next) => {
-  // السماح لجميع الأصول
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-  res.header('Access-Control-Allow-Credentials', 'true');
+  // ✅ السماح لجميع الأصول
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
   
-  // معالجة طلبات OPTIONS (preflight)
+  // ✅ معالجة OPTIONS مباشرة وإرجاع 200
   if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
+    console.log('🟡 OPTIONS request:', req.url);
+    return res.status(200).end();
   }
+  
   next();
 });
 
-// CORS middleware إضافي
+// ✅ CORS middleware إضافي للتأكد
 app.use(cors({
   origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -39,7 +41,7 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 
 // ✅ ================================================
-// ✅ مسارات الاختبار (ضعها قبل routes الأخرى)
+// ✅ مسارات الاختبار
 // ✅ ================================================
 
 // مسار اختبار بسيط
@@ -55,7 +57,7 @@ app.get('/api/test', (req, res) => {
 app.options('/api/test', (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.sendStatus(200);
+  res.status(200).end();
 });
 
 // ✅ ================================================
