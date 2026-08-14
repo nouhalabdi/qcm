@@ -12,24 +12,21 @@ const app = express();
 const server = http.createServer(app);
 
 // ✅ ===== حل CORS النهائي =====
-// Middleware مخصص لـ CORS
 app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, PATCH, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
   res.setHeader('Access-Control-Allow-Credentials', 'true');
   
   if (req.method === 'OPTIONS') {
-    console.log('🟡 OPTIONS request:', req.url);
     return res.sendStatus(200);
   }
   next();
 });
 
-// CORS middleware إضافي
 app.use(cors({
   origin: '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
   credentials: true
 }));
@@ -40,7 +37,7 @@ app.use(express.json({ limit: '50mb' }));
 app.get('/api/test', (req, res) => {
   res.json({ 
     status: 'ok', 
-    message: 'CORS is working!',
+    message: 'Server is running!',
     timestamp: new Date().toISOString()
   });
 });
