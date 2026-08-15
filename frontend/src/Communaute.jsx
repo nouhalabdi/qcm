@@ -41,10 +41,10 @@ function Communaute() {
       setLoading(true);
       try {
         const [studentsRes, groupsRes] = await Promise.all([
-          fetch(`https://reussite-qcms.onrender.com/api/community/students?year=${encodeURIComponent(user.year)}&userId=${user._id}`, {
+          fetch(`https://reussite-qcmss-1nc7.onrender.com/api/community/students?year=${encodeURIComponent(user.year)}&userId=${user._id}`, {
             signal: abortController.signal
           }),
-          fetch(`https://reussite-qcms.onrender.com/api/community/modules-groups?year=${encodeURIComponent(user.year)}&semester=${encodeURIComponent(semester)}`, {
+          fetch(`https://reussite-qcmss-1nc7.onrender.com/api/community/modules-groups?year=${encodeURIComponent(user.year)}&semester=${encodeURIComponent(semester)}`, {
             signal: abortController.signal
           })
         ]);
@@ -84,7 +84,7 @@ function Communaute() {
   // ✅ 3. دوال فتح المحادثات
   const openDirectChat = async (student) => {
     try {
-      const res = await fetch('https://reussite-qcms.onrender.com/api/community/conversations/direct', {
+      const res = await fetch('https://reussite-qcmss-1nc7.onrender.com/api/community/conversations/direct', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user._id, otherUserId: student._id })
@@ -104,7 +104,7 @@ function Communaute() {
 
   const openGroupChat = async (module) => {
     try {
-      const res = await fetch(`https://reussite-qcms.onrender.com/api/community/conversations/module/${module._id}`);
+      const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/community/conversations/module/${module._id}`);
       const conv = await res.json();
 
       setSearchParams({

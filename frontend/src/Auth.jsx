@@ -45,7 +45,7 @@ function Auth() {
       : { username: formData.name, email: formData.email, password: formData.password, year: formData.year };
 
     try {
-      const response = await fetch(`https://reussite-qcms.onrender.com/api/auth/${endpoint}`, {
+      const response = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/auth/${endpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body)
@@ -85,7 +85,7 @@ function Auth() {
       
       const deviceId = getDeviceId();
       
-      const response = await fetch('https://reussite-qcms.onrender.com/api/auth/google', {
+      const response = await fetch('https://reussite-qcmss-1nc7.onrender.com/api/auth/google', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

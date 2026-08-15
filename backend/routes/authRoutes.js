@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { register, login, googleLogin } = require('../controllers/authController');
 
-// ✅ تمت إزالة CORS اليدوي لأن الميدلوير العام في server.js يتولى ذلك
+// ✅ تمت إزالة أي كود خاص بـ CORS هنا، لأن الميدلوير العام في server.js يتولى كل شيء
 
 // مسار التسجيل
 router.post('/register', register);

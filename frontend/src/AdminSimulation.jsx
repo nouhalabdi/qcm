@@ -18,7 +18,7 @@ function AdminSimulation() {
   useEffect(() => {
     const fetchModules = async () => {
       try {
-        const res = await fetch(`https://reussite-qcms.onrender.com/api/modules?year=${filters.year}&semester=${filters.semester}`);
+        const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/modules?year=${filters.year}&semester=${filters.semester}`);
         const data = await res.json();
         setModules(data);
       } catch (err) { console.error(err); }
@@ -31,7 +31,7 @@ function AdminSimulation() {
     const fetchSimulations = async () => {
       setLoadingSims(true);
       try {
-        const res = await fetch(`https://reussite-qcms.onrender.com/api/quizzes?moduleId=${selectedModule}&type=simulation`);
+        const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/quizzes?moduleId=${selectedModule}&type=simulation`);
         const data = await res.json();
         setSimulations(data);
       } catch (err) { console.error(err); } finally { setLoadingSims(false); }
@@ -66,12 +66,12 @@ function AdminSimulation() {
     setLoading(true);
     try {
       const payload = { type: 'simulation', moduleId: selectedModule, year: filters.year, durationMinutes: form.durationMinutes, authorName: 'Admin', correctionMode: 'deferred', questions: form.questions.map(({ id, ...rest }) => rest) };
-      const res = await fetch('https://reussite-qcms.onrender.com/api/quizzes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      const res = await fetch('https://reussite-qcmss-1nc7.onrender.com/api/quizzes', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
       if (res.ok) {
         alert('Simulation créée avec succès !');
         setForm({ title: '', durationMinutes: 30, questions: [] });
         setJsonInput('');
-        const refreshRes = await fetch(`https://reussite-qcms.onrender.com/api/quizzes?moduleId=${selectedModule}&type=simulation`);
+        const refreshRes = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/quizzes?moduleId=${selectedModule}&type=simulation`);
         setSimulations(await refreshRes.json());
       } else { const errorData = await res.json(); alert(`Erreur: ${errorData.message}`); }
     } catch (err) { alert('Erreur réseau.'); } finally { setLoading(false); }
@@ -80,10 +80,10 @@ function AdminSimulation() {
   const handleDelete = async (simId) => {
     if (!window.confirm('Supprimer cette simulation ?')) return;
     try {
-      const res = await fetch(`https://reussite-qcms.onrender.com/api/quizzes/${simId}`, { method: 'DELETE' });
+      const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/quizzes/${simId}`, { method: 'DELETE' });
       if (res.ok) {
         alert('Supprimée avec succès.');
-        const refreshRes = await fetch(`https://reussite-qcms.onrender.com/api/quizzes?moduleId=${selectedModule}&type=simulation`);
+        const refreshRes = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/quizzes?moduleId=${selectedModule}&type=simulation`);
         setSimulations(await refreshRes.json());
       } else alert('Erreur lors de la suppression.');
     } catch (err) { alert('Erreur réseau.'); }
@@ -91,7 +91,7 @@ function AdminSimulation() {
 
   const fetchRanking = async (simId) => {
     try {
-      const res = await fetch(`https://reussite-qcms.onrender.com/api/quizzes/${simId}/ranking`);
+      const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/quizzes/${simId}/ranking`);
       setRankingData(await res.json());
     } catch (err) { console.error(err); alert('Erreur de chargement du classement.'); }
   };

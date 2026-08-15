@@ -76,7 +76,7 @@ function AdminDashboard({ darkMode, toggleDarkMode, notifications, onNotificatio
   const [loadingStats, setLoadingStats] = useState(true);
 
   useEffect(() => {
-    fetch('https://reussite-qcms.onrender.com/api/stats')
+    fetch('https://reussite-qcmss-1nc7.onrender.com/api/stats')
       .then(res => res.json())
       .then(data => {
         setStats(data);

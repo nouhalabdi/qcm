@@ -17,7 +17,7 @@ function ChatWindow({ conversationId, title, type, user, onClose, onRead }) {
 
   const fetchMessages = async () => {
     try {
-      const res = await fetch(`https://reussite-qcms.onrender.com/api/community/messages/${conversationId}`);
+      const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/community/messages/${conversationId}`);
       const data = await res.json();
       data.forEach(msg => processedIds.current.add(msg._id)); // تسجيل الرسائل الحالية
       setMessages(data);
@@ -29,7 +29,7 @@ function ChatWindow({ conversationId, title, type, user, onClose, onRead }) {
   };
 
   useEffect(() => {
-    socket = io('https://reussite-qcms.onrender.com');
+    socket = io('https://reussite-qcmss-1nc7.onrender.com');
     socket.emit('join-room', conversationId);
 
     socket.on('new-message', (msg) => {
@@ -41,7 +41,7 @@ function ChatWindow({ conversationId, title, type, user, onClose, onRead }) {
 
     fetchMessages();
 
-    fetch(`https://reussite-qcms.onrender.com/api/community/conversations/${conversationId}/read`, {
+    fetch(`https://reussite-qcmss-1nc7.onrender.com/api/community/conversations/${conversationId}/read`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: user._id })
@@ -63,7 +63,7 @@ function ChatWindow({ conversationId, title, type, user, onClose, onRead }) {
     if (!text.trim() && attachments.length === 0) return;
     setSending(true);
     try {
-      const res = await fetch('https://reussite-qcms.onrender.com/api/community/messages', {
+      const res = await fetch('https://reussite-qcmss-1nc7.onrender.com/api/community/messages', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ conversationId, senderId: user._id, text: text.trim(), attachments })
@@ -97,7 +97,7 @@ function ChatWindow({ conversationId, title, type, user, onClose, onRead }) {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      const res = await fetch('https://reussite-qcms.onrender.com/api/upload', { method: 'POST', body: formData });
+      const res = await fetch('https://reussite-qcmss-1nc7.onrender.com/api/upload', { method: 'POST', body: formData });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Erreur d'envoi.");
       await handleSend([{ url: data.url, type: isImage ? 'image' : 'pdf', name: file.name }]);
@@ -112,7 +112,7 @@ function ChatWindow({ conversationId, title, type, user, onClose, onRead }) {
 
   const toggleLike = async (messageId) => {
     try {
-      const res = await fetch(`https://reussite-qcms.onrender.com/api/community/messages/${messageId}/like`, {
+      const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/community/messages/${messageId}/like`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user._id })

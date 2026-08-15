@@ -46,13 +46,13 @@ function StudentQuizView() {
   useEffect(() => {
     const fetchQuiz = async () => {
       try {
-        const res = await fetch(`https://reussite-qcms.onrender.com/api/quizzes/${quizId}`);
+        const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/quizzes/${quizId}`);
         if (!res.ok) throw new Error('Examen non trouvé');
         const data = await res.json();
         setQuiz(data);
         setTimeLeft(data.durationMinutes * 60);
 
-        const statsRes = await fetch(`https://reussite-qcms.onrender.com/api/users/profile/stats?userId=${user?._id}`);
+        const statsRes = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/users/profile/stats?userId=${user?._id}`);
         const statsData = await statsRes.json();
         const completedEntries = statsData.completedQuizzes?.filter(
           q => String(q.quizId?._id || q.quizId) === String(quizId)
@@ -134,7 +134,7 @@ function StudentQuizView() {
 
     setIsSaving(true);
     try {
-      const res = await fetch('https://reussite-qcms.onrender.com/api/users/quiz-result', {
+      const res = await fetch('https://reussite-qcmss-1nc7.onrender.com/api/users/quiz-result', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -198,7 +198,7 @@ function StudentQuizView() {
 
   const openChat = async () => {
     try {
-      const res = await fetch(`https://reussite-qcms.onrender.com/api/community/conversations/quiz/${quizId}?userId=${user._id}`);
+      const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/community/conversations/quiz/${quizId}?userId=${user._id}`);
       const conv = await res.json();
       setChatConversationId(conv._id);
       setChatTitle(conv.title || `Discussion QCM`);
@@ -212,7 +212,7 @@ function StudentQuizView() {
   const handleSaveNote = async () => {
     setSavingNote(true);
     try {
-      await fetch('https://reussite-qcms.onrender.com/api/users/quiz-note', {
+      await fetch('https://reussite-qcmss-1nc7.onrender.com/api/users/quiz-note', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -232,7 +232,7 @@ function StudentQuizView() {
 
   const fetchRanking = async () => {
     try {
-      const res = await fetch(`https://reussite-qcms.onrender.com/api/quizzes/${quizId}/ranking`);
+      const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/quizzes/${quizId}/ranking`);
       const data = await res.json();
       setRankingData(data);
       setIsRankingModalOpen(true);
@@ -246,7 +246,7 @@ function StudentQuizView() {
     if (!user) return;
     setTogglingFavorite(true);
     try {
-      await fetch(`https://reussite-qcms.onrender.com/api/users/favorite-quiz/${quizId}`, {
+      await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/users/favorite-quiz/${quizId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user._id })

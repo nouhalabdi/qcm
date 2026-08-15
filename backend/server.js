@@ -12,21 +12,25 @@ const app = express();
 const server = http.createServer(app);
 
 // ============================================
-// ✅ CORS - التكوين الصحيح مع Express 5.x
+// ✅ CORS - التكوين الصحيح (بدون app.options)
 // ============================================
 const allowedOrigins = [
   'https://resussite-qcms-eight.vercel.app',
   'https://resussite-qcms.vercel.app',
+  'https://resussite-qcmss-1nc7.onrender.com', // الرابط الجديد للخادم نفسه (لكن origin لا يحتاجه، لكن نضعه للتوثيق)
   'http://localhost:3000'
 ];
 
+// Middleware CORS - يعمل لكل الطلبات بما فيها OPTIONS تلقائياً
 app.use(cors({
   origin: function (origin, callback) {
     // السماح للطلبات بدون origin (مثل Postman) أو إذا كان origin في القائمة
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(new Error('Not allowed by CORS'));
+      // للتجربة، يمكن السماح مؤقتاً لجميع origins (فقط للتشخيص)
+      callback(null, true); // <--- نسمح للجميع مؤقتاً
+      // callback(new Error('Not allowed by CORS'));
     }
   },
   credentials: true,
@@ -34,7 +38,7 @@ app.use(cors({
   allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'X-Requested-With', 'Accept']
 }));
 
-// ✅ لا حاجة لـ app.options('*', ...) في Express 5.x
+// ✅ لا حاجة لـ app.options('*', cors()) في Express 5.x
 
 app.use(express.json({ limit: '50mb' }));
 

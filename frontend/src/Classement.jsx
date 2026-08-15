@@ -25,7 +25,7 @@ function Classement() {
   useEffect(() => {
     const fetchModules = async () => {
       try {
-        const res = await fetch(`https://reussite-qcms.onrender.com/api/modules?year=${year}&semester=${semester}`);
+        const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/modules?year=${year}&semester=${semester}`);
         const data = await res.json();
         setModules(data);
         if (!data.find(m => m._id === selectedModule)) {
@@ -58,10 +58,10 @@ function Classement() {
       setLoading(true);
       try {
         const [lessonsRes, examsRes, simRes, studentsRes] = await Promise.all([
-          fetch(`https://reussite-qcms.onrender.com/api/lessons?moduleId=${selectedModule}`),
-          fetch(`https://reussite-qcms.onrender.com/api/quizzes?moduleId=${selectedModule}&type=module`),
-          fetch(`https://reussite-qcms.onrender.com/api/quizzes?moduleId=${selectedModule}&type=simulation`),
-          fetch(`https://reussite-qcms.onrender.com/api/users?year=${year}`)
+          fetch(`https://reussite-qcmss-1nc7.onrender.com/api/lessons?moduleId=${selectedModule}`),
+          fetch(`https://reussite-qcmss-1nc7.onrender.com/api/quizzes?moduleId=${selectedModule}&type=module`),
+          fetch(`https://reussite-qcmss-1nc7.onrender.com/api/quizzes?moduleId=${selectedModule}&type=simulation`),
+          fetch(`https://reussite-qcmss-1nc7.onrender.com/api/users?year=${year}`)
         ]);
 
         let lessonsData = await lessonsRes.json();
@@ -99,7 +99,7 @@ function Classement() {
       try {
         // جلب إحصائيات كل طالب
         const statsPromises = students.map(async (student) => {
-          const res = await fetch(`https://reussite-qcms.onrender.com/api/users/profile/stats?userId=${student._id}`);
+          const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/users/profile/stats?userId=${student._id}`);
           if (!res.ok) return null;
           return await res.json();
         });
@@ -165,7 +165,7 @@ function Classement() {
       setLoading(true);
       try {
         const statsPromises = students.map(async (student) => {
-          const res = await fetch(`https://reussite-qcms.onrender.com/api/users/profile/stats?userId=${student._id}`);
+          const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/users/profile/stats?userId=${student._id}`);
           if (!res.ok) return null;
           return await res.json();
         });

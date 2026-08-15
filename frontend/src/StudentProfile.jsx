@@ -162,7 +162,7 @@ function StudentProfile() {
 
     const fetchStats = async () => {
       try {
-        const res = await fetch(`https://reussite-qcms.onrender.com/api/users/profile/stats?userId=${user._id}`);
+        const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/users/profile/stats?userId=${user._id}`);
         if (!res.ok) throw new Error('Erreur serveur');
         const data = await res.json();
 
@@ -206,13 +206,13 @@ function StudentProfile() {
       setLoadingExtra(true);
       try {
         // 1. Récupérer tous les modules de l'année de l'utilisateur
-        const modulesRes = await fetch(`https://reussite-qcms.onrender.com/api/modules?year=${user.year}`);
+        const modulesRes = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/modules?year=${user.year}`);
         const modulesData = await modulesRes.json();
         setModules(modulesData);
 
         // 2. Récupérer toutes les leçons de ces modules
         const lessonsPromises = modulesData.map(mod =>
-          fetch(`https://reussite-qcms.onrender.com/api/lessons?moduleId=${mod._id}`).then(r => r.json())
+          fetch(`https://reussite-qcmss-1nc7.onrender.com/api/lessons?moduleId=${mod._id}`).then(r => r.json())
         );
         const lessonsArrays = await Promise.all(lessonsPromises);
         const allLessonsData = lessonsArrays.flat();
@@ -220,7 +220,7 @@ function StudentProfile() {
 
         // 3. Récupérer tous les QCMs (pour chaque module, type module et simulation, et pour chaque leçon)
         const quizzesPromises = modulesData.map(mod =>
-          fetch(`https://reussite-qcms.onrender.com/api/quizzes?moduleId=${mod._id}`).then(r => r.json())
+          fetch(`https://reussite-qcmss-1nc7.onrender.com/api/quizzes?moduleId=${mod._id}`).then(r => r.json())
         );
         const quizzesArrays = await Promise.all(quizzesPromises);
         const allQuizzesData = quizzesArrays.flat();
@@ -240,7 +240,7 @@ function StudentProfile() {
   const updateTodoLocalAndBackend = async (newList) => {
     setTodoList(newList);
     try {
-      await fetch('https://reussite-qcms.onrender.com/api/users/todo', {
+      await fetch('https://reussite-qcmss-1nc7.onrender.com/api/users/todo', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user._id, todoList: newList })
@@ -279,7 +279,7 @@ function StudentProfile() {
     e.preventDefault();
     setUpdating(true);
     try {
-      const res = await fetch('https://reussite-qcms.onrender.com/api/users/profile', {
+      const res = await fetch('https://reussite-qcmss-1nc7.onrender.com/api/users/profile', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ _id: user._id, username: formData.username, phone: formData.phone, pseudo: formData.pseudo })
@@ -297,7 +297,7 @@ function StudentProfile() {
   // ---------- Gestion des notes ----------
   const updateNote = async (quizId, newText) => {
     try {
-      await fetch('https://reussite-qcms.onrender.com/api/users/quiz-note', {
+      await fetch('https://reussite-qcmss-1nc7.onrender.com/api/users/quiz-note', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user._id, quizId, noteText: newText })
@@ -310,7 +310,7 @@ function StudentProfile() {
   const deleteNote = async (quizId) => {
     if (!window.confirm("Voulez-vous vraiment supprimer cette note ?")) return;
     try {
-      const res = await fetch(`https://reussite-qcms.onrender.com/api/users/quiz-note/${quizId}?userId=${user._id}`, { method: 'DELETE' });
+      const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/users/quiz-note/${quizId}?userId=${user._id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error();
       setStats(prev => ({ ...prev, quizNotes: prev.quizNotes.filter(n => n.quizId !== quizId) }));
     } catch (e) { alert('Erreur lors de la suppression.'); }

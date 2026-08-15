@@ -61,7 +61,7 @@ function StudentModuleDetail() {
       setError(null);
 
       try {
-        const baseUrl = 'https://reussite-qcms.onrender.com/api';
+        const baseUrl = 'https://reussite-qcmss-1nc7.onrender.com/api';
         const moduleUrl = `${baseUrl}/modules/${moduleId}`;
         const lessonsUrl = `${baseUrl}/lessons?moduleId=${moduleId}`;
         const examsUrl = `${baseUrl}/quizzes?moduleId=${moduleId}&type=module&isIA=false`;
@@ -146,7 +146,7 @@ function StudentModuleDetail() {
     setReadLessons(prev => isRead ? prev.filter(id => id !== lessonId) : [...prev, lessonId]);
 
     try {
-      const response = await fetch(`https://reussite-qcms.onrender.com/api/users/read/${lessonId}`, {
+      const response = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/users/read/${lessonId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId })
@@ -220,7 +220,7 @@ function StudentModuleDetail() {
       // إضافة الجديد
       const updated = [...filtered, { fileUrl: secureUrl, originalLessonId: editingLessonId, year: editingYear }];
       // تحديث الخادم بالقائمة الجديدة
-      fetch('https://reussite-qcms.onrender.com/api/users/custom-files', {
+      fetch('https://reussite-qcmss-1nc7.onrender.com/api/users/custom-files', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId, customFiles: updated })
@@ -242,7 +242,7 @@ function StudentModuleDetail() {
         lesson.yearContents && lesson.yearContents.some(yc => yc.year === year)
       );
       if (lessonWithQcm) {
-        const res = await fetch(`https://reussite-qcms.onrender.com/api/quizzes?lessonId=${lessonWithQcm._id}&type=lesson&isIA=false`);
+        const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/quizzes?lessonId=${lessonWithQcm._id}&type=lesson&isIA=false`);
         const data = await res.json();
         if (data.length > 0) {
           navigate(`/quiz/lesson/${data[0]._id}?type=lesson&title=${encodeURIComponent(lessonWithQcm.title)}`);
