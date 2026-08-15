@@ -166,10 +166,6 @@ function Home() {
             <span className="text-blue-600 dark:text-blue-400 font-bold text-lg sm:text-xl">Réussite QCMs</span>
             <span className="text-gray-400 text-xs sm:text-sm">- Tous droits réservés © 2026</span>
           </div>
-          <div className="flex flex-col sm:flex-row items-center gap-2 text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-            <span>Développé par</span>
-            <a href="https://www.facebook.com/profile.php?id=61590728369782" target="_blank" rel="noopener noreferrer" className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-1.5 rounded-full font-medium transition duration-200 shadow-sm">NL dev</a>
-          </div>
         </div>
       </footer>
 
