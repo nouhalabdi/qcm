@@ -5,52 +5,43 @@ const fs = require('fs');
 const http = require('http');
 const { Server } = require('socket.io');
 const cron = require('node-cron');
+const cors = require('cors');
 require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
 
 // ============================================
-// ✅ MIDDLEWARE CORS المخصص (الحل النهائي)
+// ✅ CORS - التكوين الصحيح مع Express 5.x
 // ============================================
-app.use((req, res, next) => {
-    // 1. تحديد الأصول المسموح بها
-    const allowedOrigins = [
-        'https://resussite-qcms-eight.vercel.app',
-        'https://resussite-qcms-fgowx4acr-nouhalabdis-projects.vercel.app',
-        'https://resussite-qcms.vercel.app',
-        'http://localhost:3000'
-    ];
-    const origin = req.headers.origin;
+const allowedOrigins = [
+  'https://resussite-qcms-eight.vercel.app',
+  'https://resussite-qcms.vercel.app',
+  'http://localhost:3000'
+];
 
-    // 2. التحقق من الأصل والسماح به
-    if (allowedOrigins.includes(origin)) {
-        res.setHeader('Access-Control-Allow-Origin', origin);
+app.use(cors({
+  origin: function (origin, callback) {
+    // السماح للطلبات بدون origin (مثل Postman) أو إذا كان origin في القائمة
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
     } else {
-        // السماح مؤقتاً لجميع الأصول لتشخيص المشكلة (يمكنك تقييده لاحقاً)
-        res.setHeader('Access-Control-Allow-Origin', '*');
+      callback(new Error('Not allowed by CORS'));
     }
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'X-Requested-With', 'Accept']
+}));
 
-    // 3. إعداد باقي رؤوس CORS
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-
-    // 4. معالجة طلبات OPTIONS (preflight) مباشرة وإرجاع 200
-    if (req.method === 'OPTIONS') {
-        console.log('🟡 OPTINS request received for:', req.url);
-        return res.status(200).end();
-    }
-
-    next();
-});
+// ✅ لا حاجة لـ app.options('*', ...) في Express 5.x
 
 app.use(express.json({ limit: '50mb' }));
 
 // ✅ مسار اختبار
 app.get('/api/test', (req, res) => {
-  res.json({ 
-    status: 'ok', 
+  res.json({
+    status: 'ok',
     message: 'Server is running!',
     timestamp: new Date().toISOString()
   });
@@ -81,10 +72,10 @@ app.use('/uploads', express.static(uploadsDir, {
 app.get('/api/check-file/:filename', (req, res) => {
   const filePath = path.join(uploadsDir, req.params.filename);
   if (fs.existsSync(filePath)) {
-    res.json({ 
-      exists: true, 
+    res.json({
+      exists: true,
       path: filePath,
-      size: fs.statSync(filePath).size 
+      size: fs.statSync(filePath).size
     });
   } else {
     res.json({ exists: false });

@@ -4,16 +4,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const { register, login, googleLogin } = require('../controllers/authController');
 
-// ✅ إضافة CORS لهذا الـ router فقط
-router.use((req, res, next) => {
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  if (req.method === 'OPTIONS') {
-    return res.sendStatus(200);
-  }
-  next();
-});
+// ✅ تمت إزالة CORS اليدوي لأن الميدلوير العام في server.js يتولى ذلك
 
 // مسار التسجيل
 router.post('/register', register);
