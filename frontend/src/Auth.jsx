@@ -14,7 +14,13 @@ const GoogleIcon = () => (
 
 function Auth() {
   const [isLogin, setIsLogin] = useState(true);
-  const [formData, setFormData] = useState({ name: '', email: '', password: '', year: '' });
+  const [formData, setFormData] = useState({ 
+    name: '', 
+    email: '', 
+    password: '', 
+    year: '',
+    phone: ''  // ✅ إضافة حقل الهاتف
+  });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -42,7 +48,13 @@ function Auth() {
 
     const body = isLogin 
       ? { email: formData.email, password: formData.password, deviceId }
-      : { username: formData.name, email: formData.email, password: formData.password, year: formData.year };
+      : { 
+          username: formData.name, 
+          email: formData.email, 
+          password: formData.password, 
+          year: formData.year,
+          phone: formData.phone  // ✅ إرسال رقم الهاتف
+        };
 
     try {
       const response = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/auth/${endpoint}`, {
@@ -163,7 +175,6 @@ function Auth() {
           </div>
           {error && (<div className="mb-3 p-2 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg text-xs border border-red-200 dark:border-red-800">{error}</div>)}
           
-          {/* ✅ النموذج المصحح */}
           <form onSubmit={handleSubmit} className="space-y-3">
             {!isLogin && (
               <>
@@ -203,6 +214,23 @@ function Auth() {
                     <option value="4ème Année">4ème Année</option>
                     <option value="5ème Année">5ème Année</option>
                   </select>
+                </div>
+                {/* ✅ إضافة حقل رقم الهاتف */}
+                <div>
+                  <label htmlFor="phone" className="block text-[10px] font-semibold text-gray-600 dark:text-gray-300 mb-1 uppercase tracking-wider">
+                    Numéro de téléphone
+                  </label>
+                  <input
+                    id="phone"
+                    type="tel"
+                    name="phone"
+                    autoComplete="tel"
+                    required
+                    value={formData.phone}
+                    onChange={handleChange}
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-slate-600 rounded-lg bg-gray-50 dark:bg-slate-900 text-gray-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition placeholder:text-gray-400 text-sm"
+                    placeholder="05XX-XX-XX-XX"
+                  />
                 </div>
               </>
             )}

@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { MapPin, GraduationCap, Mail, CheckCircle2, Clock, Calendar } from 'lucide-react';
+import { MapPin, GraduationCap, Mail, CheckCircle2, Clock, Calendar, Phone } from 'lucide-react'; // ✅ إضافة Phone
 
 function AdminStudents() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // دالة لجلب الطلاب من الخادم
   const fetchStudents = useCallback(async () => {
     setLoading(true);
     try {
@@ -31,7 +30,6 @@ function AdminStudents() {
         body: JSON.stringify({ isSubscribed: !currentStatus })
       });
       if (!res.ok) throw new Error('Erreur lors de la mise à jour');
-      // إعادة جلب القائمة لتحديث الواجهة
       await fetchStudents();
     } catch (err) {
       alert('Erreur lors du changement d\'abonnement');
@@ -105,6 +103,11 @@ function AdminStudents() {
                 <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300 min-w-0">
                   <Mail size={14} className="text-slate-400 flex-shrink-0" />
                   <span className="truncate">{student.email}</span>
+                </div>
+                {/* ✅ إضافة رقم الهاتف */}
+                <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
+                  <Phone size={14} className="text-slate-400 flex-shrink-0" />
+                  <span>{student.phone || 'Non renseigné'}</span>
                 </div>
                 <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
                   <GraduationCap size={14} className="text-slate-400 flex-shrink-0" />

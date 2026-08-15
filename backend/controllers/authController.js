@@ -3,7 +3,6 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { notifyUser } = require('../utils/notify');
 
-// ✅ دالة مساعدة: تبعث إشعار لكل الأدمنز (يمكن يكون عندك أكثر من أدمن)
 async function notifyAllAdmins(io, { title, body }) {
   try {
     const admins = await User.find({ role: 'admin' }).select('_id');
@@ -20,10 +19,9 @@ async function notifyAllAdmins(io, { title, body }) {
   }
 }
 
-// 1. تسجيل طالب جديد (Register)
 exports.register = async (req, res) => {
   try {
-    const { username, email, password, year } = req.body;
+    const { username, email, password, year, phone } = req.body;
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
@@ -37,12 +35,12 @@ exports.register = async (req, res) => {
       email,
       password: hashedPassword,
       year,
-      isSubscribed: false // ❗ الحماية: مستخدم جديد غير مشترك
+      phone: phone || '',   // ✅ إضافة phone
+      isSubscribed: false
     });
 
     await newUser.save();
 
-    // ✅ إشعار الأدمن بتسجيل طالب جديد
     const io = req.app.get('io');
     await notifyAllAdmins(io, {
       title: 'Nouvelle inscription 🎓',
@@ -59,7 +57,6 @@ exports.register = async (req, res) => {
   }
 };
 
-// 2. تسجيل الدخول (Login)
 exports.login = async (req, res) => {
   try {
     const { email, password, deviceId } = req.body;
@@ -79,7 +76,6 @@ exports.login = async (req, res) => {
       user.deviceIds.push(deviceId);
       await user.save();
 
-      // ✅ إشعار الأدمن فقط إذا كان هذا جهاز إضافي (مش أول جهاز يسجل بيه الطالب)
       if (!isFirstDevice) {
         const io = req.app.get('io');
         await notifyAllAdmins(io, {
@@ -104,7 +100,8 @@ exports.login = async (req, res) => {
         email: user.email,
         year: user.year,
         role: user.role,
-        isSubscribed: user.isSubscribed
+        isSubscribed: user.isSubscribed,
+        phone: user.phone || ''   // ✅ إعادة phone في الاستجابة
       }
     });
 
@@ -113,7 +110,6 @@ exports.login = async (req, res) => {
   }
 };
 
-// 3. تسجيل الدخول باستخدام Google (جديد مع الحماية)
 exports.googleLogin = async (req, res) => {
   try {
     const { email, displayName } = req.body;
@@ -121,13 +117,13 @@ exports.googleLogin = async (req, res) => {
     let user = await User.findOne({ email });
 
     if (!user) {
-      // إذا كان حسابًا جديدًا (لم يسجل من قبل)
       const newUser = new User({
         username: displayName || "Étudiant",
         email: email,
         password: "google_oauth_placeholder",
         year: "Non spécifié",
-        isSubscribed: false, // ❗ الحماية: غير مشترك
+        phone: '',
+        isSubscribed: false,
         role: 'student'
       });
       user = await newUser.save();
@@ -147,7 +143,8 @@ exports.googleLogin = async (req, res) => {
         email: user.email,
         role: user.role,
         year: user.year,
-        isSubscribed: user.isSubscribed
+        isSubscribed: user.isSubscribed,
+        phone: user.phone || ''
       }
     });
 

@@ -4,7 +4,7 @@ import {
   BookOpen, CheckCircle, BarChart2, LogOut, Edit, Save, X,
   Heart, ListTodo, StickyNote, Calendar as CalendarIcon, Video, FileText, Pencil, Trash2,
   MapPin, GraduationCap, Calendar, Plus, ArrowRight, Clock, Zap, Award, TrendingUp,
-  AlertCircle, ChevronDown, ChevronUp
+  AlertCircle, ChevronDown, ChevronUp, Phone  // ✅ إضافة Phone
 } from 'lucide-react';
 
 // --- Fonctions d'aide pour le calendrier ---
@@ -429,10 +429,16 @@ function StudentProfile() {
             {user?.pseudo && <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">@{user.pseudo}</p>}
           </div>
 
+          {/* ✅ عرض معلومات المستخدم (بما فيها رقم الهاتف) */}
           <div className="flex flex-wrap justify-center gap-6 text-sm text-slate-600 dark:text-slate-300 mb-6">
             <div className="flex items-center gap-2 bg-white/60 dark:bg-slate-800/60 px-4 py-1.5 rounded-full shadow-sm backdrop-blur-sm"><MapPin size={16} className="text-blue-600 dark:text-blue-400" /><span>Université de Sétif</span></div>
             <div className="flex items-center gap-2 bg-white/60 dark:bg-slate-800/60 px-4 py-1.5 rounded-full shadow-sm backdrop-blur-sm"><GraduationCap size={16} className="text-blue-600 dark:text-blue-400" /><span>Médecine Dentaire</span></div>
             <div className="flex items-center gap-2 bg-white/60 dark:bg-slate-800/60 px-4 py-1.5 rounded-full shadow-sm backdrop-blur-sm"><Calendar size={16} className="text-blue-600 dark:text-blue-400" /><span>{user?.year}</span></div>
+            {/* ✅ إضافة رقم الهاتف */}
+            <div className="flex items-center gap-2 bg-white/60 dark:bg-slate-800/60 px-4 py-1.5 rounded-full shadow-sm backdrop-blur-sm">
+              <Phone size={16} className="text-blue-600 dark:text-blue-400" />
+              <span>{user?.phone || 'Non renseigné'}</span>
+            </div>
           </div>
 
           {/* Section édition du profil */}

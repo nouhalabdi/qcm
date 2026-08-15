@@ -2,12 +2,11 @@ import React, { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { 
   BookOpen, Layers, Zap, BarChart2, MessageCircle, Users, Monitor, Trophy, Star, Play, 
-  ChevronLeft, ChevronRight, X  // ✅ تمت إضافة X هنا
+  ChevronLeft, ChevronRight, X
 } from 'lucide-react';
 
 import pathwayImg from './assets/pathway.png';
 import doctorsImg from './assets/doctors.png';
-// افترض أن لديك صورًا في مجلد assets، يمكنك تسميتها مثلاً: slide1.png, slide2.png, ...
 import slide1 from './assets/photo22.png';
 import slide2 from './assets/photo33.png';
 import slide3 from './assets/photo44.png';
@@ -23,10 +22,9 @@ function Home() {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user'));
 
-  // حالة عرض الشرائح
   const [showCarousel, setShowCarousel] = useState(false);
   const [currentSlide, setCurrentSlide] = useState(0);
-  const slides = [slide1, slide2, slide3, slide4, slide5, slide6, slide7, slide8, slide9]; // يمكنك إضافة المزيد من الصور
+  const slides = [slide1, slide2, slide3, slide4, slide5, slide6, slide7, slide8, slide9];
 
   const handleStart = () => {
     if (!user) navigate('/auth');
@@ -50,7 +48,7 @@ function Home() {
       if (el) {
         setTimeout(() => {
           el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        }, 100);
+        }, 300); // ✅ زيادة الوقت إلى 300ms لضمان التحميل
       }
     }
   }, [location.state]);
