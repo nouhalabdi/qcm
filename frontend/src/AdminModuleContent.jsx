@@ -818,7 +818,7 @@ function AdminModuleContent() {
     }
     try {
       const yearContentsArray = form.selectedYears.map(year => ({ year, versions: form.yearContents[year] }));
-      const res = await fetch('https://reussite-qcmss-1nc7.onrender.com/api/lesson', {
+      const res = await fetch('https://reussite-qcmss-1nc7.onrender.com/api/lessons', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ title: form.title, order: form.order, moduleId, yearContents: yearContentsArray })
