@@ -5,14 +5,10 @@ import { ArrowLeft, FileText, Video, BookOpen, Play, CheckCircle, X } from 'luci
 import PdfAnnotatorModal from './PdfAnnotatorModal';
 import VideoPlayerModal from './VideoPlayerModal';
 
-// ✅ دالة لتحويل روابط الملفات القديمة إلى الخادم الجديد
+// ✅ دالة لإصلاح روابط الملفات (تحويل المضيف القديم إلى الجديد)
 const fixFileUrl = (url) => {
   if (!url) return url;
-  // استبدال اسم المضيف القديم بالجديد
   let newUrl = url.replace('reussite-qcms.onrender.com', 'reussite-qcmss-1nc7.onrender.com');
-  // إذا كان الرابط من Cloudinary، لا نغيره
-  if (newUrl.includes('cloudinary.com')) return newUrl;
-  // التأكد من HTTPS
   if (newUrl.startsWith('http://')) {
     newUrl = newUrl.replace('http://', 'https://');
   }
@@ -49,7 +45,7 @@ function StudentModuleDetail() {
 
   const [iaCourseQuizModal, setIaCourseQuizModal] = useState({ open: false, quizzes: [], title: '' });
 
-  // ✅ دالة لضمان استخدام HTTPS للروابط (تم دمجها مع fixFileUrl)
+  // ✅ دالة لضمان استخدام HTTPS للروابط (تم دمجها مع fixFileUrl، لكن نتركها للتوافق)
   const ensureHttps = (url) => {
     if (!url) return url;
     if (url.startsWith('http://')) {
@@ -210,7 +206,6 @@ function StudentModuleDetail() {
     const version = yearContent.versions.find(v => v.language === selectedLang);
     if (!version) return { originalFiles: [], modifiedFiles: [], aiFiles: [], aiSummary: null, iaQuizzes: [] };
 
-    // استخدام fixFileUrl لتحويل الروابط
     const originalFiles = (version.pdf || []).map(f => ({ url: fixFileUrl(f.url), name: f.name || 'Cours', isModified: false }));
     // تصفية الملفات المعدلة للحصول على واحد فقط لكل (lesson, year)
     const modifiedFiles = (customFiles || [])
@@ -289,7 +284,7 @@ function StudentModuleDetail() {
     setShowYearPicker(false);
   };
 
-  // ✅ دالة مفتوحة PDF مع HTTPS وتحويل الرابط
+  // ✅ دالة مفتوحة PDF مع HTTPS + إصلاح الرابط
   const openPdfViewer = (url, title, canAnnotate, canDownload, originalLessonId = null, year = null) => {
     const secureUrl = fixFileUrl(url);
     setEditingLessonId(originalLessonId);
@@ -627,7 +622,7 @@ function StudentModuleDetail() {
                         <p className="font-medium text-slate-800 dark:text-white">{lesson.title}</p>
                         <div className="flex flex-wrap gap-2 mt-1">
                           {files.map((f, i) => (
-                            <button key={i} onClick={() => setVideoPlayer({ url: f.url, title: f.name || lesson.title })} className="flex items-center gap-1 text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200 transition">
+                            <button key={i} onClick={() => setVideoPlayer({ url: fixFileUrl(f.url), title: f.name || lesson.title })} className="flex items-center gap-1 text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200 transition">
                               <Video size={14} /> {f.name || 'Vidéo'}
                             </button>
                           ))}

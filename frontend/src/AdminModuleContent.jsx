@@ -3,14 +3,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Plus, FileText, Video, BookOpen, Trash2, Clock, Calendar, Edit, X, ImagePlus, CheckCircle } from 'lucide-react';
 
-// ✅ دالة لتحويل روابط الملفات القديمة إلى الخادم الجديد
+// ✅ دالة لإصلاح روابط الملفات (تحويل المضيف القديم إلى الجديد)
 const fixFileUrl = (url) => {
   if (!url) return url;
-  // استبدال اسم المضيف القديم بالجديد
   let newUrl = url.replace('reussite-qcms.onrender.com', 'reussite-qcmss-1nc7.onrender.com');
-  // إذا كان الرابط من Cloudinary، لا نغيره
-  if (newUrl.includes('cloudinary.com')) return newUrl;
-  // التأكد من HTTPS
   if (newUrl.startsWith('http://')) {
     newUrl = newUrl.replace('http://', 'https://');
   }
@@ -955,7 +951,7 @@ function AdminModuleContent() {
     }
   };
 
-  // ---- Affichage des liens (avec correction des URLs) ----
+  // ---- Affichage des liens (avec correction des URL) ----
   const renderVersionLinks = (v) => (
     <div key={v.language} className="flex flex-wrap items-center justify-between gap-2 text-sm border-b border-blue-100 dark:border-slate-700 pb-2 mb-2 last:border-0 last:pb-0 last:mb-0">
       <span className="font-medium text-slate-600 dark:text-slate-300">{v.language === 'fr' ? '🇫🇷 FR' : '🇬🇧 EN'}</span>
