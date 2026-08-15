@@ -17,28 +17,22 @@ const server = http.createServer(app);
 const allowedOrigins = [
   'https://resussite-qcms-eight.vercel.app',
   'https://resussite-qcms.vercel.app',
-  'https://resussite-qcmss-1nc7.onrender.com', // الرابط الجديد للخادم نفسه (لكن origin لا يحتاجه، لكن نضعه للتوثيق)
+  'https://resussite-qcmss-1nc7.onrender.com',
   'http://localhost:3000'
 ];
 
-// Middleware CORS - يعمل لكل الطلبات بما فيها OPTIONS تلقائياً
 app.use(cors({
   origin: function (origin, callback) {
-    // السماح للطلبات بدون origin (مثل Postman) أو إذا كان origin في القائمة
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      // للتجربة، يمكن السماح مؤقتاً لجميع origins (فقط للتشخيص)
-      callback(null, true); // <--- نسمح للجميع مؤقتاً
-      // callback(new Error('Not allowed by CORS'));
+      callback(null, true); // مؤقتاً للسماح للجميع
     }
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'Origin', 'X-Requested-With', 'Accept']
 }));
-
-// ✅ لا حاجة لـ app.options('*', cors()) في Express 5.x
 
 app.use(express.json({ limit: '50mb' }));
 
@@ -56,13 +50,23 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('✅ MongoDB Connected Successfully!'))
   .catch(err => console.log('❌ MongoDB Error:', err));
 
-// ✅ مجلد uploads
+// ✅ مجلد uploads مع CORS مخصص
 const uploadsDir = path.join(__dirname, 'uploads');
 if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
   console.log('📁 Dossier uploads créé');
 }
 
+// ✅ إضافة CORS لملفات uploads
+app.use('/uploads', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  next();
+});
 app.use('/uploads', express.static(uploadsDir, {
   setHeaders: (res, filePath) => {
     if (filePath.endsWith('.pdf')) {

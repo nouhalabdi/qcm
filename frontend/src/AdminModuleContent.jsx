@@ -3,6 +3,20 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Plus, FileText, Video, BookOpen, Trash2, Clock, Calendar, Edit, X, ImagePlus, CheckCircle } from 'lucide-react';
 
+// ✅ دالة لتحويل روابط الملفات القديمة إلى الخادم الجديد
+const fixFileUrl = (url) => {
+  if (!url) return url;
+  // استبدال اسم المضيف القديم بالجديد
+  let newUrl = url.replace('reussite-qcms.onrender.com', 'reussite-qcmss-1nc7.onrender.com');
+  // إذا كان الرابط من Cloudinary، لا نغيره
+  if (newUrl.includes('cloudinary.com')) return newUrl;
+  // التأكد من HTTPS
+  if (newUrl.startsWith('http://')) {
+    newUrl = newUrl.replace('http://', 'https://');
+  }
+  return newUrl;
+};
+
 // Génération des années
 const generateYears = () => {
   const years = [];
@@ -299,7 +313,7 @@ const QuestionsBuilder = ({ questions, onChange, uploadFile }) => {
               <div className="flex flex-wrap gap-2 mt-2">
                 {q.explanationImages.map((url, i) => (
                   <div key={i} className="relative">
-                    <img src={url} alt={`explication ${i + 1}`} className="w-16 h-16 object-cover rounded border border-gray-300 dark:border-slate-600" />
+                    <img src={fixFileUrl(url)} alt={`explication ${i + 1}`} className="w-16 h-16 object-cover rounded border border-gray-300 dark:border-slate-600" />
                     <button type="button" onClick={() => removeExplanationImage(qIndex, url)} className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-4 h-4 text-[10px] flex items-center justify-center leading-none">✕</button>
                   </div>
                 ))}
@@ -941,19 +955,19 @@ function AdminModuleContent() {
     }
   };
 
-  // ---- Affichage des liens ----
+  // ---- Affichage des liens (avec correction des URLs) ----
   const renderVersionLinks = (v) => (
     <div key={v.language} className="flex flex-wrap items-center justify-between gap-2 text-sm border-b border-blue-100 dark:border-slate-700 pb-2 mb-2 last:border-0 last:pb-0 last:mb-0">
       <span className="font-medium text-slate-600 dark:text-slate-300">{v.language === 'fr' ? '🇫🇷 FR' : '🇬🇧 EN'}</span>
       <div className="flex flex-wrap gap-2">
-        {v.pdf?.map((item, i) => <a key={i} href={item.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-red-50 text-red-600 hover:bg-red-100 rounded dark:bg-red-900/20 dark:text-red-400"><FileText size={14} /> {item.name || `Cours ${i+1}`}</a>)}
-        {v.video?.map((item, i) => <a key={i} href={item.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 rounded dark:bg-blue-900/20 dark:text-blue-400"><Video size={14} /> {item.name || `Vidéo ${i+1}`}</a>)}
-        {v.summary?.map((item, i) => <a key={i} href={item.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-green-50 text-green-600 hover:bg-green-100 rounded dark:bg-green-900/20 dark:text-green-400"><BookOpen size={14} /> {item.name || `Résumé ${i+1}`}</a>)}
-        {v.td?.map((item, i) => <a key={i} href={item.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-orange-50 text-orange-600 hover:bg-orange-100 rounded dark:bg-orange-900/20 dark:text-orange-400"><FileText size={14} /> {item.name || `TD ${i+1}`}</a>)}
-        {v.correction?.map((item, i) => <a key={i} href={item.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-purple-50 text-purple-600 hover:bg-purple-100 rounded dark:bg-purple-900/20 dark:text-purple-400"><FileText size={14} /> {item.name || `Corr. TD ${i+1}`}</a>)}
-        {v.other?.map((item, i) => <a key={i} href={item.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-gray-200 text-gray-600 hover:bg-gray-300 rounded dark:bg-gray-700 dark:text-gray-400"><FileText size={14} /> {item.name || `Autre ${i+1}`}</a>)}
-        {v.ai?.map((item, i) => <a key={i} href={item.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-purple-200 text-purple-600 hover:bg-purple-300 rounded dark:bg-purple-900/30 dark:text-purple-400"><Video size={14} /> {item.name || `IA ${i+1}`}</a>)}
-        {v.aiSummary?.map((item, i) => <a key={i} href={item.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-indigo-100 text-indigo-700 hover:bg-indigo-200 rounded dark:bg-indigo-900/30 dark:text-indigo-400"><BookOpen size={14} /> {item.name || `Résumé IA ${i+1}`}</a>)}
+        {v.pdf?.map((item, i) => <a key={i} href={fixFileUrl(item.url)} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-red-50 text-red-600 hover:bg-red-100 rounded dark:bg-red-900/20 dark:text-red-400"><FileText size={14} /> {item.name || `Cours ${i+1}`}</a>)}
+        {v.video?.map((item, i) => <a key={i} href={fixFileUrl(item.url)} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 rounded dark:bg-blue-900/20 dark:text-blue-400"><Video size={14} /> {item.name || `Vidéo ${i+1}`}</a>)}
+        {v.summary?.map((item, i) => <a key={i} href={fixFileUrl(item.url)} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-green-50 text-green-600 hover:bg-green-100 rounded dark:bg-green-900/20 dark:text-green-400"><BookOpen size={14} /> {item.name || `Résumé ${i+1}`}</a>)}
+        {v.td?.map((item, i) => <a key={i} href={fixFileUrl(item.url)} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-orange-50 text-orange-600 hover:bg-orange-100 rounded dark:bg-orange-900/20 dark:text-orange-400"><FileText size={14} /> {item.name || `TD ${i+1}`}</a>)}
+        {v.correction?.map((item, i) => <a key={i} href={fixFileUrl(item.url)} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-purple-50 text-purple-600 hover:bg-purple-100 rounded dark:bg-purple-900/20 dark:text-purple-400"><FileText size={14} /> {item.name || `Corr. TD ${i+1}`}</a>)}
+        {v.other?.map((item, i) => <a key={i} href={fixFileUrl(item.url)} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-gray-200 text-gray-600 hover:bg-gray-300 rounded dark:bg-gray-700 dark:text-gray-400"><FileText size={14} /> {item.name || `Autre ${i+1}`}</a>)}
+        {v.ai?.map((item, i) => <a key={i} href={fixFileUrl(item.url)} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-purple-200 text-purple-600 hover:bg-purple-300 rounded dark:bg-purple-900/30 dark:text-purple-400"><Video size={14} /> {item.name || `IA ${i+1}`}</a>)}
+        {v.aiSummary?.map((item, i) => <a key={i} href={fixFileUrl(item.url)} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-indigo-100 text-indigo-700 hover:bg-indigo-200 rounded dark:bg-indigo-900/30 dark:text-indigo-400"><BookOpen size={14} /> {item.name || `Résumé IA ${i+1}`}</a>)}
       </div>
     </div>
   );
