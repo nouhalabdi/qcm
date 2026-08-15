@@ -5,16 +5,6 @@ import { ArrowLeft, FileText, Video, BookOpen, Play, CheckCircle, X } from 'luci
 import PdfAnnotatorModal from './PdfAnnotatorModal';
 import VideoPlayerModal from './VideoPlayerModal';
 
-// ✅ دالة لإصلاح روابط الملفات (تحويل المضيف القديم إلى الجديد)
-const fixFileUrl = (url) => {
-  if (!url) return url;
-  let newUrl = url.replace('reussite-qcms.onrender.com', 'reussite-qcmss-1nc7.onrender.com');
-  if (newUrl.startsWith('http://')) {
-    newUrl = newUrl.replace('http://', 'https://');
-  }
-  return newUrl;
-};
-
 function StudentModuleDetail() {
   const { moduleId } = useParams();
   const navigate = useNavigate();
@@ -45,7 +35,7 @@ function StudentModuleDetail() {
 
   const [iaCourseQuizModal, setIaCourseQuizModal] = useState({ open: false, quizzes: [], title: '' });
 
-  // ✅ دالة لضمان استخدام HTTPS للروابط (تم دمجها مع fixFileUrl، لكن نتركها للتوافق)
+  // ✅ دالة لضمان استخدام HTTPS للروابط
   const ensureHttps = (url) => {
     if (!url) return url;
     if (url.startsWith('http://')) {
@@ -206,14 +196,14 @@ function StudentModuleDetail() {
     const version = yearContent.versions.find(v => v.language === selectedLang);
     if (!version) return { originalFiles: [], modifiedFiles: [], aiFiles: [], aiSummary: null, iaQuizzes: [] };
 
-    const originalFiles = (version.pdf || []).map(f => ({ url: fixFileUrl(f.url), name: f.name || 'Cours', isModified: false }));
+    const originalFiles = (version.pdf || []).map(f => ({ url: ensureHttps(f.url), name: f.name || 'Cours', isModified: false }));
     // تصفية الملفات المعدلة للحصول على واحد فقط لكل (lesson, year)
     const modifiedFiles = (customFiles || [])
       .filter(f => f.originalLessonId?.toString() === lesson._id?.toString() && f.year === year)
-      .map(f => ({ url: fixFileUrl(f.fileUrl), name: 'Cours modifié', isModified: true }));
+      .map(f => ({ url: ensureHttps(f.fileUrl), name: 'Cours modifié', isModified: true }));
 
-    const aiFiles = (version.ai || []).map(f => ({ url: fixFileUrl(f.url), name: f.name || 'Cours IA' }));
-    const aiSummary = version.aiSummary && version.aiSummary.length > 0 ? { url: fixFileUrl(version.aiSummary[0].url), name: version.aiSummary[0].name || 'Résumé IA' } : null;
+    const aiFiles = (version.ai || []).map(f => ({ url: ensureHttps(f.url), name: f.name || 'Cours IA' }));
+    const aiSummary = version.aiSummary && version.aiSummary.length > 0 ? { url: ensureHttps(version.aiSummary[0].url), name: version.aiSummary[0].name || 'Résumé IA' } : null;
     const iaQuizzesForLesson = iaQuizzes.filter(q => q.type === 'lesson' && q.lessonId?._id?.toString() === lesson._id?.toString());
 
     return { originalFiles, modifiedFiles, aiFiles, aiSummary, iaQuizzes: iaQuizzesForLesson };
@@ -221,7 +211,7 @@ function StudentModuleDetail() {
 
   // تحديث customFiles محلياً واستبدال القديم بالجديد
   const handleModifiedSaved = (newUrl) => {
-    const secureUrl = fixFileUrl(newUrl);
+    const secureUrl = ensureHttps(newUrl);
     setCustomFiles(prev => {
       // حذف الملفات القديمة لنفس الدرس والسنة
       const filtered = prev.filter(f =>
@@ -284,9 +274,9 @@ function StudentModuleDetail() {
     setShowYearPicker(false);
   };
 
-  // ✅ دالة مفتوحة PDF مع HTTPS + إصلاح الرابط
+  // ✅ دالة مفتوحة PDF مع HTTPS
   const openPdfViewer = (url, title, canAnnotate, canDownload, originalLessonId = null, year = null) => {
-    const secureUrl = fixFileUrl(url);
+    const secureUrl = ensureHttps(url);
     setEditingLessonId(originalLessonId);
     setEditingYear(year);
     setPdfViewer({ url: secureUrl, title, canAnnotate, canDownload, originalLessonId, year });
@@ -330,7 +320,7 @@ function StudentModuleDetail() {
           className="relative p-6 flex flex-col sm:flex-row items-center justify-between gap-4 overflow-hidden min-h-[160px]"
           style={{
             backgroundColor: moduleImage ? 'transparent' : '#FDF4F2',
-            backgroundImage: moduleImage ? `url(${fixFileUrl(moduleImage)})` : 'none',
+            backgroundImage: moduleImage ? `url(${ensureHttps(moduleImage)})` : 'none',
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             backgroundRepeat: 'no-repeat'
@@ -340,7 +330,7 @@ function StudentModuleDetail() {
           <h2 className="relative z-10 text-3xl font-bold text-slate-900 dark:text-white">{moduleTitle}</h2>
           <div className="relative z-10 w-32 h-32 flex-shrink-0">
             {moduleImage ? (
-              <img src={fixFileUrl(moduleImage)} alt={moduleTitle} className="w-full h-full object-cover rounded-full border-4 border-white shadow-lg" />
+              <img src={ensureHttps(moduleImage)} alt={moduleTitle} className="w-full h-full object-cover rounded-full border-4 border-white shadow-lg" />
             ) : (
               <div className="w-full h-full bg-cyan-100 rounded-full flex items-center justify-center text-cyan-700">
                 <BookOpen size={48} />
@@ -575,7 +565,7 @@ function StudentModuleDetail() {
                     if (!yearContent) return;
                     const version = yearContent.versions.find(v => v.language === selectedLang);
                     if (!version || !version.summary || version.summary.length === 0) return;
-                    items.push({ lesson, files: version.summary.map(f => ({ ...f, url: fixFileUrl(f.url) })) });
+                    items.push({ lesson, files: version.summary.map(f => ({ ...f, url: ensureHttps(f.url) })) });
                   });
                   if (items.length === 0) return <p className="text-slate-400 text-center py-4">Aucun résumé disponible.</p>;
                   return items.map(({ lesson, files }) => (
@@ -613,7 +603,7 @@ function StudentModuleDetail() {
                     if (!yearContent) return;
                     const version = yearContent.versions.find(v => v.language === selectedLang);
                     if (!version || !version.video || version.video.length === 0) return;
-                    items.push({ lesson, files: version.video.map(f => ({ ...f, url: fixFileUrl(f.url) })) });
+                    items.push({ lesson, files: version.video.map(f => ({ ...f, url: ensureHttps(f.url) })) });
                   });
                   if (items.length === 0) return <p className="text-slate-400 text-center py-4">Aucune vidéo disponible.</p>;
                   return items.map(({ lesson, files }) => (
@@ -622,7 +612,7 @@ function StudentModuleDetail() {
                         <p className="font-medium text-slate-800 dark:text-white">{lesson.title}</p>
                         <div className="flex flex-wrap gap-2 mt-1">
                           {files.map((f, i) => (
-                            <button key={i} onClick={() => setVideoPlayer({ url: fixFileUrl(f.url), title: f.name || lesson.title })} className="flex items-center gap-1 text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200 transition">
+                            <button key={i} onClick={() => setVideoPlayer({ url: f.url, title: f.name || lesson.title })} className="flex items-center gap-1 text-xs bg-red-100 text-red-700 px-2 py-1 rounded hover:bg-red-200 transition">
                               <Video size={14} /> {f.name || 'Vidéo'}
                             </button>
                           ))}
@@ -647,8 +637,8 @@ function StudentModuleDetail() {
                     if (!yearContent) return;
                     const version = yearContent.versions.find(v => v.language === selectedLang);
                     if (!version) return;
-                    const tdFiles = (version.td || []).map(f => ({ ...f, url: fixFileUrl(f.url) }));
-                    const correctionFiles = (version.correction || []).map(f => ({ ...f, url: fixFileUrl(f.url) }));
+                    const tdFiles = (version.td || []).map(f => ({ ...f, url: ensureHttps(f.url) }));
+                    const correctionFiles = (version.correction || []).map(f => ({ ...f, url: ensureHttps(f.url) }));
                     const allFiles = [...tdFiles, ...correctionFiles];
                     if (allFiles.length === 0) return;
                     items.push({ lesson, files: allFiles, version });
