@@ -1,5 +1,5 @@
-// StudentProgress.js
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+// StudentProgress.js - تحميل فوري مع localStorage وحساب النسبة المئوية
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   BookOpen, CheckCircle, Clock, Filter,
@@ -14,8 +14,19 @@ function StudentProgress() {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user'));
 
-  // بيانات الإحصائيات الأساسية
-  const [stats, setStats] = useState({
+  // --- تحميل فوري من localStorage ---
+  const loadFromCache = (key, fallback) => {
+    try {
+      const cached = localStorage.getItem(key);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < 5 * 60 * 1000) return data;
+      }
+    } catch (e) {}
+    return fallback;
+  };
+
+  const [stats, setStats] = useState(() => loadFromCache('progress_stats', {
     progress: 0,
     completedExams: 0,
     completedLessonQCMs: 0,
@@ -23,17 +34,20 @@ function StudentProgress() {
     totalLessons: 0,
     readLessons: [],
     completedQuizzes: [],
-  });
-  const [loading, setLoading] = useState(true);
+  }));
   const [filterPeriod, setFilterPeriod] = useState('week');
   const [chartData, setChartData] = useState([]);
+  const [allModules, setAllModules] = useState(() => loadFromCache('progress_modules', []));
+  const [allLessons, setAllLessons] = useState(() => loadFromCache('progress_lessons', []));
+  const [allQuizzes, setAllQuizzes] = useState(() => loadFromCache('progress_quizzes', []));
+  const [loadingExtra, setLoadingExtra] = useState(true);
 
-  // بيانات إضافية (موديولات، دروس، QCMs)
-  const [allModules, setAllModules] = useState([]);
-  const [allLessons, setAllLessons] = useState([]);
-  const [allQuizzes, setAllQuizzes] = useState([]);
-  const [extraLoading, setExtraLoading] = useState(true);
-  const extraFetched = useRef(false);
+  // --- حساب التقدم كنسبة مئوية (0-100) ---
+  const progressPercent = useMemo(() => {
+    const total = stats.totalLessons || 1;
+    const read = stats.lessonsRead || 0;
+    return Math.min(100, Math.round((read / total) * 100));
+  }, [stats.totalLessons, stats.lessonsRead]);
 
   // --- حساب متوسط النقاط ---
   const averageScore = useMemo(() => {
@@ -42,32 +56,7 @@ function StudentProgress() {
     return Math.round(total / stats.completedQuizzes.length);
   }, [stats.completedQuizzes]);
 
-  // --- حساب الوحدات المكتملة (للاحتفاظ بها إن أردت استخدامها في مكان آخر) ---
-  const moduleStats = useMemo(() => {
-    if (allModules.length === 0 || allQuizzes.length === 0 || stats.completedQuizzes.length === 0) {
-      return { totalModules: 0, completedModules: 0 };
-    }
-
-    const completedQuizIds = stats.completedQuizzes.map(q => String(q.quizId?._id || q.quizId));
-
-    let total = 0;
-    let completed = 0;
-
-    allModules.forEach(mod => {
-      const moduleQuizzes = allQuizzes.filter(q => 
-        q.moduleId?._id?.toString() === mod._id?.toString() && 
-        q.type === 'module'
-      );
-      if (moduleQuizzes.length === 0) return;
-      total++;
-      const resolvedCount = moduleQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
-      if (resolvedCount === moduleQuizzes.length) completed++;
-    });
-
-    return { totalModules: total, completedModules: completed };
-  }, [allModules, allQuizzes, stats.completedQuizzes]);
-
-  // --- تحميل بيانات المستخدم ---
+  // --- تحميل البيانات الأساسية في الخلفية ---
   useEffect(() => {
     if (!user || !user._id) {
       navigate('/auth');
@@ -92,68 +81,47 @@ function StudentProgress() {
           quizId: q.quizId || { title: 'QCM sans titre', lessonId: null, moduleId: null }
         })).filter(q => q.date && !isNaN(q.date.getTime()));
 
-        setStats({
+        const newStats = {
           ...data,
           readLessons,
           completedQuizzes,
           lessonsRead: readLessons.length,
           completedLessonQCMs: completedQuizzes.filter(q => q.type === 'lesson').length,
           completedExams: completedQuizzes.filter(q => q.type === 'module' || q.type === 'simulation').length
-        });
-
-        setLoading(false);
+        };
+        setStats(newStats);
+        localStorage.setItem('progress_stats', JSON.stringify({ data: newStats, timestamp: Date.now() }));
+        setLoadingExtra(false);
       } catch (err) {
         console.error(err);
-        setLoading(false);
+        setLoadingExtra(false);
       }
     };
 
     fetchStats();
   }, [user, navigate]);
 
-  // --- تحميل البيانات الإضافية مع cache ---
+  // --- تحميل البيانات الإضافية في الخلفية ---
   useEffect(() => {
-    if (!user || !user.year || extraFetched.current) return;
-    extraFetched.current = true;
+    if (!user || !user.year) return;
 
-    const CACHE_KEY = `progress_extra_${user.year}`;
-    const CACHE_EXPIRY = 5 * 60 * 1000;
-
-    const loadFromCache = () => {
+    const fetchExtra = async () => {
       try {
-        const cached = localStorage.getItem(CACHE_KEY);
-        if (cached) {
-          const { data, timestamp } = JSON.parse(cached);
-          if (Date.now() - timestamp < CACHE_EXPIRY) {
-            return data;
-          }
+        const cachedModules = loadFromCache('progress_modules', null);
+        const cachedLessons = loadFromCache('progress_lessons', null);
+        const cachedQuizzes = loadFromCache('progress_quizzes', null);
+        if (cachedModules && cachedLessons && cachedQuizzes) {
+          setAllModules(cachedModules);
+          setAllLessons(cachedLessons);
+          setAllQuizzes(cachedQuizzes);
+          setLoadingExtra(false);
+          return;
         }
-      } catch (e) {}
-      return null;
-    };
 
-    const saveToCache = (data) => {
-      try {
-        localStorage.setItem(CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
-      } catch (e) {}
-    };
-
-    const fetchExtraData = async () => {
-      setExtraLoading(true);
-
-      const cachedData = loadFromCache();
-      if (cachedData) {
-        setAllModules(cachedData.modules);
-        setAllLessons(cachedData.allLessons);
-        setAllQuizzes(cachedData.allQuizzes);
-        setExtraLoading(false);
-        return;
-      }
-
-      try {
         const modulesRes = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/modules?year=${user.year}`);
         const modulesData = await modulesRes.json();
         setAllModules(modulesData);
+        localStorage.setItem('progress_modules', JSON.stringify({ data: modulesData, timestamp: Date.now() }));
 
         const lessonsPromises = modulesData.map(mod =>
           fetch(`https://reussite-qcmss-1nc7.onrender.com/api/lessons?moduleId=${mod._id}`).then(r => r.json())
@@ -169,38 +137,30 @@ function StudentProgress() {
 
         let allLessonsData = [];
         let allQuizzesData = [];
-
         if (lessonsResults.status === 'fulfilled') {
           allLessonsData = lessonsResults.value.flat();
+          localStorage.setItem('progress_lessons', JSON.stringify({ data: allLessonsData, timestamp: Date.now() }));
         }
         if (quizzesResults.status === 'fulfilled') {
           allQuizzesData = quizzesResults.value.flat();
+          localStorage.setItem('progress_quizzes', JSON.stringify({ data: allQuizzesData, timestamp: Date.now() }));
         }
-
         setAllLessons(allLessonsData);
         setAllQuizzes(allQuizzesData);
-
-        saveToCache({
-          modules: modulesData,
-          allLessons: allLessonsData,
-          allQuizzes: allQuizzesData
-        });
+        setLoadingExtra(false);
       } catch (err) {
         console.error('Erreur chargement données extra:', err);
-      } finally {
-        setExtraLoading(false);
+        setLoadingExtra(false);
       }
     };
 
-    fetchExtraData();
+    fetchExtra();
   }, [user]);
 
-  // --- دالة مساعدة لاستخراج اسم الوحدة ---
+  // --- دالة استخراج اسم الوحدة ---
   const getModuleNameFromQuiz = useCallback((quiz) => {
     if (!quiz) return 'Module inconnu';
-    if (quiz.moduleId && typeof quiz.moduleId === 'object' && quiz.moduleId.title) {
-      return quiz.moduleId.title;
-    }
+    if (quiz.moduleId && typeof quiz.moduleId === 'object' && quiz.moduleId.title) return quiz.moduleId.title;
     if (quiz.lessonId) {
       const lessonId = quiz.lessonId._id || quiz.lessonId;
       const lesson = allLessons.find(l => l._id === lessonId);
@@ -221,14 +181,12 @@ function StudentProgress() {
   // --- تحضير بيانات المنحنى ---
   const prepareChartData = useCallback((readLessons, completedQuizzes, filter) => {
     const dailyMap = {};
-
     readLessons.forEach(r => {
       if (!r.readAt) return;
       const key = r.readAt.toISOString().split('T')[0];
       if (!dailyMap[key]) dailyMap[key] = { date: key, lessons: 0, quizzes: 0 };
       dailyMap[key].lessons++;
     });
-
     completedQuizzes.forEach(q => {
       if (!q.date) return;
       const key = q.date.toISOString().split('T')[0];
@@ -238,7 +196,6 @@ function StudentProgress() {
 
     const now = new Date();
     let startDate, endDate = new Date();
-
     switch (filter) {
       case 'week': {
         const dayOfWeek = now.getDay();
@@ -280,7 +237,6 @@ function StudentProgress() {
       dateRange.push(current.toISOString().split('T')[0]);
       current.setDate(current.getDate() + 1);
     }
-
     return dateRange.map(date => ({
       date,
       lessons: dailyMap[date]?.lessons || 0,
@@ -307,64 +263,22 @@ function StudentProgress() {
     }
   };
 
-  // ---------- Skeleton de chargement ----------
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 md:p-8">
-        <div className="max-w-6xl mx-auto space-y-6 animate-pulse">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
-            <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-48"></div>
-          </div>
-          <div className="bg-white dark:bg-slate-800 p-4 rounded-xl">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-20"></div>
-              <div className="flex gap-2">
-                {[...Array(4)].map((_, i) => (
-                  <div key={i} className="h-8 bg-slate-200 dark:bg-slate-700 rounded-lg w-16"></div>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="bg-white dark:bg-slate-800 p-4 rounded-xl">
-                <div className="flex items-center gap-3">
-                  <div className="w-5 h-5 bg-slate-200 dark:bg-slate-700 rounded"></div>
-                  <div><div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-16"></div><div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-12 mt-1"></div></div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-xl">
-            <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-40 mb-4"></div>
-            <div className="h-64 bg-slate-200 dark:bg-slate-700 rounded"></div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ---------- JSX ----------
+  // --- عرض الصفحة فوراً ---
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 md:p-8">
       <div className="max-w-6xl mx-auto">
+        {loadingExtra && (
+          <div className="text-center text-xs text-blue-500 dark:text-blue-400 animate-pulse mb-2">
+            Mise à jour des données en arrière-plan...
+          </div>
+        )}
+
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
-          <button
-            onClick={() => navigate('/profile')}
-            className="p-2 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition"
-          >
-            <ArrowLeft size={20} className="text-slate-600 dark:text-slate-300" />
-          </button>
+          <button onClick={() => navigate('/profile')} className="p-2 bg-white dark:bg-slate-800 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition"><ArrowLeft size={20} className="text-slate-600 dark:text-slate-300" /></button>
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <TrendingUp size={28} className="text-blue-600 dark:text-blue-400" />
-              Ma Progression
-            </h1>
-            <p className="text-slate-500 dark:text-slate-400 text-sm">
-              {getPeriodLabel()} · {user?.username}
-            </p>
+            <h1 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white flex items-center gap-2"><TrendingUp size={28} className="text-blue-600 dark:text-blue-400" /> Ma Progression</h1>
+            <p className="text-slate-500 dark:text-slate-400 text-sm">{getPeriodLabel()} · {user?.username}</p>
           </div>
         </div>
 
@@ -374,15 +288,7 @@ function StudentProgress() {
           <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Période :</span>
           <div className="flex flex-wrap gap-2">
             {['week', 'month', 'year', 'all'].map(p => (
-              <button
-                key={p}
-                onClick={() => setFilterPeriod(p)}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${
-                  filterPeriod === p
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
-                }`}
-              >
+              <button key={p} onClick={() => setFilterPeriod(p)} className={`px-3 py-1.5 rounded-lg text-sm font-medium transition ${filterPeriod === p ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>
                 {p === 'week' ? 'Semaine' : p === 'month' ? 'Mois' : p === 'year' ? 'Année' : 'Tout'}
               </button>
             ))}
@@ -392,42 +298,16 @@ function StudentProgress() {
         {/* Statistiques générales */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-            <div className="flex items-center gap-3">
-              <BookOpen size={20} className="text-blue-600" />
-              <div>
-                <p className="text-xs text-slate-500">Cours lus</p>
-                <p className="text-xl font-bold text-slate-800 dark:text-white">{stats.lessonsRead}</p>
-              </div>
-            </div>
+            <div className="flex items-center gap-3"><BookOpen size={20} className="text-blue-600" /><div><p className="text-xs text-slate-500">Cours lus</p><p className="text-xl font-bold text-slate-800 dark:text-white">{stats.lessonsRead}</p></div></div>
           </div>
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-            <div className="flex items-center gap-3">
-              <Zap size={20} className="text-yellow-600" />
-              <div>
-                <p className="text-xs text-slate-500">QCMs résolus</p>
-                <p className="text-xl font-bold text-slate-800 dark:text-white">{stats.completedQuizzes?.length || 0}</p>
-              </div>
-            </div>
+            <div className="flex items-center gap-3"><Zap size={20} className="text-yellow-600" /><div><p className="text-xs text-slate-500">QCMs résolus</p><p className="text-xl font-bold text-slate-800 dark:text-white">{stats.completedQuizzes?.length || 0}</p></div></div>
           </div>
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-            <div className="flex items-center gap-3">
-              <Clock size={20} className="text-orange-600" />
-              <div>
-                <p className="text-xs text-slate-500">Progression</p>
-                <p className="text-xl font-bold text-slate-800 dark:text-white">{stats.progress}%</p>
-              </div>
-            </div>
+            <div className="flex items-center gap-3"><Clock size={20} className="text-orange-600" /><div><p className="text-xs text-slate-500">Progression</p><p className="text-xl font-bold text-slate-800 dark:text-white">{progressPercent}%</p></div></div>
           </div>
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-            <div className="flex items-center gap-3">
-              <Award size={20} className="text-green-600" />
-              <div>
-                <p className="text-xs text-slate-500">Score moyen</p>
-                <p className="text-xl font-bold text-slate-800 dark:text-white">
-                  {averageScore !== null ? `${averageScore}%` : '—'}
-                </p>
-              </div>
-            </div>
+            <div className="flex items-center gap-3"><Award size={20} className="text-green-600" /><div><p className="text-xs text-slate-500">Score moyen</p><p className="text-xl font-bold text-slate-800 dark:text-white">{averageScore !== null ? `${averageScore}%` : '—'}</p></div></div>
           </div>
         </div>
 
@@ -441,31 +321,10 @@ function StudentProgress() {
                   <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" />
                   <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="#94A3B8" />
                   <YAxis tick={{ fontSize: 11 }} stroke="#94A3B8" />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'white',
-                      border: '1px solid #E2E8F0',
-                      borderRadius: '8px',
-                      fontSize: '12px'
-                    }}
-                  />
+                  <Tooltip contentStyle={{ backgroundColor: 'white', border: '1px solid #E2E8F0', borderRadius: '8px', fontSize: '12px' }} />
                   <Legend />
-                  <Line
-                    type="monotone"
-                    dataKey="lessons"
-                    stroke="#3B82F6"
-                    strokeWidth={2}
-                    name="Cours lus"
-                    dot={{ r: 3 }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="quizzes"
-                    stroke="#F59E0B"
-                    strokeWidth={2}
-                    name="QCMs résolus"
-                    dot={{ r: 3 }}
-                  />
+                  <Line type="monotone" dataKey="lessons" stroke="#3B82F6" strokeWidth={2} name="Cours lus" dot={{ r: 3 }} />
+                  <Line type="monotone" dataKey="quizzes" stroke="#F59E0B" strokeWidth={2} name="QCMs résolus" dot={{ r: 3 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -479,9 +338,7 @@ function StudentProgress() {
         {/* Détails */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-            <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
-              <BookOpen size={18} className="text-blue-600" /> Cours lus
-            </h4>
+            <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2"><BookOpen size={18} className="text-blue-600" /> Cours lus</h4>
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {stats.readLessons?.length > 0 ? (
                 stats.readLessons.map((r, i) => {
@@ -493,27 +350,17 @@ function StudentProgress() {
                   return (
                     <div key={i} className="flex items-center gap-2 text-sm p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
                       <CheckCircle size={14} className="text-green-600" />
-                      <span className="text-slate-700 dark:text-slate-300 truncate">
-                        {r.lessonId?.title || 'Cours sans titre'}
-                      </span>
-                      {moduleName && (
-                        <span className="text-xs text-blue-600 dark:text-blue-400 ml-auto">
-                          {moduleName}
-                        </span>
-                      )}
+                      <span className="text-slate-700 dark:text-slate-300 truncate">{r.lessonId?.title || 'Cours sans titre'}</span>
+                      {moduleName && <span className="text-xs text-blue-600 dark:text-blue-400 ml-auto">{moduleName}</span>}
                     </div>
                   );
                 })
-              ) : (
-                <p className="text-xs text-slate-400">Aucun cours lu.</p>
-              )}
+              ) : <p className="text-xs text-slate-400">Aucun cours lu.</p>}
             </div>
           </div>
 
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
-            <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
-              <Zap size={18} className="text-yellow-600" /> QCMs résolus
-            </h4>
+            <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2"><Zap size={18} className="text-yellow-600" /> QCMs résolus</h4>
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {stats.completedQuizzes?.length > 0 ? (
                 stats.completedQuizzes.map((q, i) => {
@@ -523,27 +370,18 @@ function StudentProgress() {
                   return (
                     <div key={i} className="flex items-center gap-2 text-sm p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
                       <CheckCircle size={14} className="text-green-600" />
-                      <span className="text-slate-700 dark:text-slate-300 truncate">
-                        {typeLabel} - {moduleName} {lessonName && `(${lessonName})`}
-                      </span>
+                      <span className="text-slate-700 dark:text-slate-300 truncate">{typeLabel} - {moduleName} {lessonName && `(${lessonName})`}</span>
                       <span className="text-xs text-slate-400 ml-auto">{q.score}%</span>
                     </div>
                   );
                 })
-              ) : (
-                <p className="text-xs text-slate-400">Aucun QCM résolu.</p>
-              )}
+              ) : <p className="text-xs text-slate-400">Aucun QCM résolu.</p>}
             </div>
           </div>
         </div>
 
         <div className="mt-8 text-center">
-          <button
-            onClick={() => navigate('/cours')}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-600/30 transition flex items-center gap-2 mx-auto"
-          >
-            <BookOpen size={18} /> Continuer à étudier
-          </button>
+          <button onClick={() => navigate('/cours')} className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-lg shadow-blue-600/30 transition flex items-center gap-2 mx-auto"><BookOpen size={18} /> Continuer à étudier</button>
         </div>
       </div>
     </div>
