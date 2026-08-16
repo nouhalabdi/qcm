@@ -701,7 +701,7 @@ function StudentProfile() {
               </div>
             </div>
 
-            {/* Modules (uniquement les non complets) */}
+            {/* Modules (uniquement les non complets) - version simplifiée */}
             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
               <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
                 <Award size={18} className="text-purple-600" /> Modules
@@ -712,18 +712,12 @@ function StudentProfile() {
                   <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
                     {incompleteModules.slice(0, showAllModules ? incompleteModules.length : 5).map((mod) => (
                       <div key={mod._id} className="flex items-center justify-between text-sm p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                        <div className="flex flex-col">
-                          <span className="text-slate-700 dark:text-slate-300 truncate font-medium">{mod.title}</span>
-                          <div className="flex gap-3 text-xs text-slate-500 dark:text-slate-400">
-                            <span>Cours: {mod.readLessonsCount}/{mod.totalLessons}</span>
-                            <span>QCMs: {mod.completedQuizzesCount}/{mod.totalQuizzes}</span>
-                          </div>
-                        </div>
+                        <span className="text-slate-700 dark:text-slate-300 truncate">{mod.title}</span>
                         <button
                           onClick={() => navigate(`/cours/module/${mod._id}`)}
                           className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded-lg transition flex items-center gap-1"
                         >
-                          Étudier <ArrowRight size={12} />
+                          Aller étudier <ArrowRight size={12} />
                         </button>
                       </div>
                     ))}
