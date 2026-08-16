@@ -178,18 +178,31 @@ function StudentProgress() {
     return 'Module inconnu';
   }, [allLessons, allModules]);
 
-  // --- تحضير بيانات المنحنى ---
+  // --- تحضير بيانات المنحنى (مع التحقق من صحة التاريخ) ---
   const prepareChartData = useCallback((readLessons, completedQuizzes, filter) => {
     const dailyMap = {};
+    
     readLessons.forEach(r => {
-      if (!r.readAt) return;
-      const key = r.readAt.toISOString().split('T')[0];
+      // التحقق من أن readAt هو كائن Date صالح
+      let date = r.readAt;
+      if (typeof date === 'string') {
+        date = new Date(date);
+      }
+      if (!(date instanceof Date) || isNaN(date.getTime())) return;
+      
+      const key = date.toISOString().split('T')[0];
       if (!dailyMap[key]) dailyMap[key] = { date: key, lessons: 0, quizzes: 0 };
       dailyMap[key].lessons++;
     });
+
     completedQuizzes.forEach(q => {
-      if (!q.date) return;
-      const key = q.date.toISOString().split('T')[0];
+      let date = q.date;
+      if (typeof date === 'string') {
+        date = new Date(date);
+      }
+      if (!(date instanceof Date) || isNaN(date.getTime())) return;
+      
+      const key = date.toISOString().split('T')[0];
       if (!dailyMap[key]) dailyMap[key] = { date: key, lessons: 0, quizzes: 0 };
       dailyMap[key].quizzes++;
     });
