@@ -1,5 +1,5 @@
-// StudentProgress.js - تحميل فوري مع localStorage وحساب النسبة المئوية
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+// StudentProgress.js - تحميل فوري مع localStorage وحساب النسبة المئوية (مصحح)
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   BookOpen, CheckCircle, Clock, Filter,
@@ -13,16 +13,32 @@ import {
 function StudentProgress() {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user'));
+  const extraFetched = useRef(false);
 
-  // --- تحميل فوري من localStorage ---
+  // --- تحميل فوري من localStorage مع معالجة التواريخ ---
   const loadFromCache = (key, fallback) => {
     try {
       const cached = localStorage.getItem(key);
       if (cached) {
         const { data, timestamp } = JSON.parse(cached);
-        if (Date.now() - timestamp < 5 * 60 * 1000) return data;
+        if (Date.now() - timestamp < 5 * 60 * 1000) {
+          // إذا كانت البيانات تحتوي على تواريخ، نحولها إلى Date
+          if (key === 'progress_stats' && data.readLessons) {
+            data.readLessons = data.readLessons.map(r => ({
+              ...r,
+              readAt: r.readAt ? new Date(r.readAt) : null
+            }));
+            data.completedQuizzes = (data.completedQuizzes || []).map(q => ({
+              ...q,
+              date: q.date ? new Date(q.date) : null
+            }));
+          }
+          return data;
+        }
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('Erreur chargement cache:', e);
+    }
     return fallback;
   };
 
@@ -69,17 +85,28 @@ function StudentProgress() {
         if (!res.ok) throw new Error('Erreur serveur');
         const data = await res.json();
 
-        const readLessons = (data.readLessons || []).map(r => ({
-          ...r,
-          readAt: r.readAt ? new Date(r.readAt) : null,
-          lessonId: r.lessonId || { title: 'Cours sans titre' }
-        })).filter(r => r.readAt && !isNaN(r.readAt.getTime()));
+        // تحويل التواريخ مع التحقق من الصلاحية
+        const readLessons = (data.readLessons || []).map(r => {
+          let readAt = r.readAt;
+          if (typeof readAt === 'string') readAt = new Date(readAt);
+          if (!(readAt instanceof Date) || isNaN(readAt.getTime())) readAt = null;
+          return {
+            ...r,
+            readAt,
+            lessonId: r.lessonId || { title: 'Cours sans titre' }
+          };
+        }).filter(r => r.readAt !== null);
 
-        const completedQuizzes = (data.completedQuizzes || []).map(q => ({
-          ...q,
-          date: q.date ? new Date(q.date) : null,
-          quizId: q.quizId || { title: 'QCM sans titre', lessonId: null, moduleId: null }
-        })).filter(q => q.date && !isNaN(q.date.getTime()));
+        const completedQuizzes = (data.completedQuizzes || []).map(q => {
+          let date = q.date;
+          if (typeof date === 'string') date = new Date(date);
+          if (!(date instanceof Date) || isNaN(date.getTime())) date = null;
+          return {
+            ...q,
+            date,
+            quizId: q.quizId || { title: 'QCM sans titre', lessonId: null, moduleId: null }
+          };
+        }).filter(q => q.date !== null);
 
         const newStats = {
           ...data,
@@ -101,9 +128,10 @@ function StudentProgress() {
     fetchStats();
   }, [user, navigate]);
 
-  // --- تحميل البيانات الإضافية في الخلفية ---
+  // --- تحميل البيانات الإضافية في الخلفية (مرة واحدة) ---
   useEffect(() => {
-    if (!user || !user.year) return;
+    if (!user || !user.year || extraFetched.current) return;
+    extraFetched.current = true;
 
     const fetchExtra = async () => {
       try {
@@ -181,15 +209,13 @@ function StudentProgress() {
   // --- تحضير بيانات المنحنى (مع التحقق من صحة التاريخ) ---
   const prepareChartData = useCallback((readLessons, completedQuizzes, filter) => {
     const dailyMap = {};
-    
+
     readLessons.forEach(r => {
-      // التحقق من أن readAt هو كائن Date صالح
+      // التأكد من أن readAt هو كائن Date صالح
       let date = r.readAt;
-      if (typeof date === 'string') {
-        date = new Date(date);
-      }
+      if (typeof date === 'string') date = new Date(date);
       if (!(date instanceof Date) || isNaN(date.getTime())) return;
-      
+
       const key = date.toISOString().split('T')[0];
       if (!dailyMap[key]) dailyMap[key] = { date: key, lessons: 0, quizzes: 0 };
       dailyMap[key].lessons++;
@@ -197,11 +223,9 @@ function StudentProgress() {
 
     completedQuizzes.forEach(q => {
       let date = q.date;
-      if (typeof date === 'string') {
-        date = new Date(date);
-      }
+      if (typeof date === 'string') date = new Date(date);
       if (!(date instanceof Date) || isNaN(date.getTime())) return;
-      
+
       const key = date.toISOString().split('T')[0];
       if (!dailyMap[key]) dailyMap[key] = { date: key, lessons: 0, quizzes: 0 };
       dailyMap[key].quizzes++;
