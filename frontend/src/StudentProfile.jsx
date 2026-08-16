@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   BookOpen, CheckCircle, LogOut, Edit, Save, X,
   Heart, ListTodo, StickyNote, Calendar as CalendarIcon, FileText, Pencil, Trash2,
-  MapPin, GraduationCap, Calendar, ArrowRight, Clock, Zap, Award, TrendingUp,
+  MapPin, GraduationCap, Calendar, ArrowRight, Clock, Zap, TrendingUp,
   ChevronDown, ChevronUp, Phone
 } from 'lucide-react';
 
@@ -153,7 +153,6 @@ function StudentProfile() {
   // États pour afficher plus/moins dans le résumé
   const [showAllLessons, setShowAllLessons] = useState(false);
   const [showAllQuizzes, setShowAllQuizzes] = useState(false);
-  const [showAllModules, setShowAllModules] = useState(false);
 
   // ---------- Chargement des données principales ----------
   useEffect(() => {
@@ -378,27 +377,9 @@ function StudentProfile() {
     }));
   }, [allQuizzes, completedQuizIds]);
 
-  const moduleCompletionStatus = useMemo(() => {
-    if (modules.length === 0 || allQuizzes.length === 0 || stats.completedQuizzes.length === 0) {
-      return [];
-    }
-    return modules.map(mod => {
-      const moduleQuizzes = allQuizzes.filter(q => q.moduleId?._id?.toString() === mod._id?.toString() && q.type === 'module');
-      const resolvedCount = moduleQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
-      const totalCount = moduleQuizzes.length;
-      return {
-        ...mod,
-        totalQuizzes: totalCount,
-        resolvedQuizzes: resolvedCount,
-        isComplete: totalCount > 0 && resolvedCount === totalCount
-      };
-    });
-  }, [modules, allQuizzes, stats.completedQuizzes]);
-
-  // فلترة النتائج
+  // فلترة النتائج (بدون Modules)
   const unreadLessons = lessonStatus.filter(l => !l.isRead);
   const unresolvedQuizzes = quizStatus.filter(q => !q.isResolved && (q.type === 'lesson' || q.type === 'module'));
-  const incompleteModules = moduleCompletionStatus.filter(m => !m.isComplete);
 
   // ---------- عرض التحميل ----------
   if (loading || loadingExtra) {
@@ -593,13 +574,13 @@ function StudentProfile() {
           )}
         </div>
 
-        {/* ---------- Résumé d'étude (détaillé) ---------- */}
+        {/* ---------- Résumé d'étude (Cours et QCMs uniquement) ---------- */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
           <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
             <TrendingUp size={20} className="text-green-600" /> Tâches à accomplir
           </h3>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Cours */}
             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
               <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
@@ -611,7 +592,10 @@ function StudentProfile() {
                   <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
                     {unreadLessons.slice(0, showAllLessons ? unreadLessons.length : 5).map((lesson) => (
                       <div key={lesson._id} className="flex items-center justify-between text-sm p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                        <span className="text-slate-700 dark:text-slate-300 truncate">{lesson.title || 'Cours sans titre'}</span>
+                        <span className="text-slate-700 dark:text-slate-300 truncate">
+                          {lesson.title || 'Cours sans titre'}
+                          {lesson.moduleId?.title && <span className="text-xs text-blue-600 ml-1">({lesson.moduleId.title})</span>}
+                        </span>
                         <button
                           onClick={() => navigate(`/cours/module/${lesson.moduleId?._id || lesson.moduleId}`)}
                           className="text-xs text-blue-600 hover:underline flex items-center gap-1"
@@ -679,43 +663,6 @@ function StudentProfile() {
                   </div>
                 ) : (
                   <p className="text-xs text-green-600 mt-1">Tous les QCMs sont résolus !</p>
-                )}
-              </div>
-            </div>
-
-            {/* Modules */}
-            <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
-              <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
-                <Award size={18} className="text-purple-600" /> Modules
-              </h4>
-              <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Non complétés ({incompleteModules.length}) :</p>
-                {incompleteModules.length > 0 ? (
-                  <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
-                    {incompleteModules.slice(0, showAllModules ? incompleteModules.length : 5).map((mod) => (
-                      <div key={mod._id} className="flex items-center justify-between text-sm p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                        <span className="text-slate-700 dark:text-slate-300 truncate">{mod.title}</span>
-                        <button
-                          onClick={() => navigate(`/cours/module/${mod._id}`)}
-                          className="text-xs text-blue-600 hover:underline flex items-center gap-1"
-                        >
-                          Aller étudier <ArrowRight size={12} />
-                        </button>
-                      </div>
-                    ))}
-                    {incompleteModules.length > 5 && !showAllModules && (
-                      <button onClick={() => setShowAllModules(!showAllModules)} className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
-                        Voir plus <ChevronDown size={14} />
-                      </button>
-                    )}
-                    {showAllModules && incompleteModules.length > 5 && (
-                      <button onClick={() => setShowAllModules(false)} className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
-                        Voir moins <ChevronUp size={14} />
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-xs text-green-600 mt-1">Tous les modules sont complétés !</p>
                 )}
               </div>
             </div>

@@ -25,7 +25,7 @@ function StudentProgress() {
     completedQuizzes: [],
   });
   const [loading, setLoading] = useState(true);
-  const [filterPeriod, setFilterPeriod] = useState('today');
+  const [filterPeriod, setFilterPeriod] = useState('week');
   const [chartData, setChartData] = useState([]);
 
   // بيانات إضافية (موديولات، دروس، QCMs)
@@ -47,7 +47,12 @@ function StudentProgress() {
     let completed = 0;
 
     allModules.forEach(mod => {
-      const moduleQuizzes = allQuizzes.filter(q => q.moduleId?._id?.toString() === mod._id?.toString() && q.type === 'module');
+      // نأخذ فقط QCMs من نوع 'module' المرتبطة بهذا الموديول
+      const moduleQuizzes = allQuizzes.filter(q => 
+        q.moduleId?._id?.toString() === mod._id?.toString() && 
+        q.type === 'module'
+      );
+      // إذا كان الموديول ليس له QCMs من نوع module، نتجاوزه (لا نحتسبه)
       if (moduleQuizzes.length === 0) return;
       total++;
       const resolvedCount = moduleQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
@@ -159,7 +164,7 @@ function StudentProgress() {
     return 'Module inconnu';
   }, [allLessons, allModules]);
 
-  // --- تحضير بيانات المنحنى (مع useCallback) ---
+  // --- تحضير بيانات المنحنى (مع معالجة الأسبوع بشكل صحيح) ---
   const prepareChartData = useCallback((readLessons, completedQuizzes, filter) => {
     const dailyMap = {};
 
@@ -181,39 +186,42 @@ function StudentProgress() {
     let startDate, endDate = new Date();
 
     switch (filter) {
-      case 'today':
+      case 'week': {
+        // الأسبوع الحالي: يبدأ من يوم الإثنين إلى يوم الأحد
+        const dayOfWeek = now.getDay(); // 0 = dimanche, 1 = lundi, ...
+        const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1); // عدد الأيام للرجوع إلى الإثنين
         startDate = new Date(now);
+        startDate.setDate(now.getDate() - diffToMonday);
         startDate.setHours(0, 0, 0, 0);
-        endDate = new Date(now);
+        endDate = new Date(startDate);
+        endDate.setDate(startDate.getDate() + 6);
         endDate.setHours(23, 59, 59, 999);
         break;
-      case 'week':
-        startDate = new Date(now);
-        startDate.setDate(now.getDate() - 6);
-        startDate.setHours(0, 0, 0, 0);
-        endDate = new Date(now);
-        endDate.setHours(23, 59, 59, 999);
-        break;
-      case 'month':
+      }
+      case 'month': {
         startDate = new Date(now.getFullYear(), now.getMonth(), 1);
         startDate.setHours(0, 0, 0, 0);
         endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
         endDate.setHours(23, 59, 59, 999);
         break;
-      case 'year':
+      }
+      case 'year': {
         startDate = new Date(now.getFullYear(), 0, 1);
         startDate.setHours(0, 0, 0, 0);
         endDate = new Date(now.getFullYear(), 11, 31);
         endDate.setHours(23, 59, 59, 999);
         break;
-      default: // 'all'
+      }
+      default: { // 'all'
         const allDates = Object.keys(dailyMap).sort();
         if (allDates.length === 0) return [];
         startDate = new Date(allDates[0]);
         endDate = new Date(allDates[allDates.length - 1]);
         break;
+      }
     }
 
+    // توليد جميع الأيام بين startDate و endDate
     const dateRange = [];
     const current = new Date(startDate);
     while (current <= endDate) {
@@ -240,7 +248,6 @@ function StudentProgress() {
 
   const getPeriodLabel = () => {
     switch (filterPeriod) {
-      case 'today': return "Aujourd'hui";
       case 'week': return 'Cette semaine';
       case 'month': return 'Ce mois-ci';
       case 'year': return 'Cette année';
@@ -283,7 +290,7 @@ function StudentProgress() {
           <Filter size={18} className="text-slate-400" />
           <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Période :</span>
           <div className="flex flex-wrap gap-2">
-            {['today', 'week', 'month', 'year', 'all'].map(p => (
+            {['week', 'month', 'year', 'all'].map(p => (
               <button
                 key={p}
                 onClick={() => setFilterPeriod(p)}
@@ -293,7 +300,7 @@ function StudentProgress() {
                     : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
                 }`}
               >
-                {p === 'today' ? "Aujourd'hui" : p === 'week' ? 'Semaine' : p === 'month' ? 'Mois' : p === 'year' ? 'Année' : 'Tout'}
+                {p === 'week' ? 'Semaine' : p === 'month' ? 'Mois' : p === 'year' ? 'Année' : 'Tout'}
               </button>
             ))}
           </div>
