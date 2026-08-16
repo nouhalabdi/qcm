@@ -1,11 +1,16 @@
+// utils/notify.js
 const Notification = require('../models/Notification');
 
-/**
- * كيخزن الإشعار فـ قاعدة البيانات (باش الطالب يلقاه كي يعاود يدخل حتى لو كان
- * غير متصل وقت الإرسال) وفـ نفس الوقت كيبعتو حي عبر Socket.io إذا كان متصل دابا.
- */
-async function notifyUser(io, userId, { title, body = '', conversationId = null, conversationType = 'system', conversationTitle = '' }) {
-  const notif = await Notification.create({ userId, title, body, conversationId, conversationType, conversationTitle });
+async function notifyUser(io, userId, { title, body = '', conversationId = null, conversationType = 'system', conversationTitle = '', data = {} }) {
+  const notif = await Notification.create({
+    userId,
+    title,
+    body,
+    conversationId,
+    conversationType,
+    conversationTitle,
+    data
+  });
 
   if (io) {
     io.to(`user-${userId}`).emit('notification', {
@@ -15,6 +20,7 @@ async function notifyUser(io, userId, { title, body = '', conversationId = null,
       conversationId: notif.conversationId,
       conversationType: notif.conversationType,
       conversationTitle: notif.conversationTitle,
+      data: notif.data,
       createdAt: notif.createdAt
     });
   }

@@ -6,6 +6,7 @@ const User = require('../models/User');
 const { notifyUser } = require('../utils/notify');
 
 // 1. إضافة درس جديد (+ إشعار مخزّن وحي لكل طلبة السنة ديال الوحدة)
+// routes/lessonRoutes.js (الجزء المعدل فقط)
 router.post('/', async (req, res) => {
   try {
     const { title, moduleId, order, yearContents } = req.body;
@@ -21,8 +22,10 @@ router.post('/', async (req, res) => {
           await notifyUser(io, s._id, {
             title: 'Nouveau cours',
             body: `Nouvelle leçon disponible : "${newLesson.title}" (${mod.title})`,
-            conversationType: 'system',
-            conversationTitle: 'Nouveau cours'
+            conversationType: 'lesson',
+            conversationId: newLesson._id,
+            conversationTitle: newLesson.title,
+            data: { lessonId: newLesson._id, moduleId: mod._id }
           });
         }
       }

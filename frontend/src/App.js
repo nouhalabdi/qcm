@@ -1,3 +1,4 @@
+// App.js
 import React, { useState, useEffect, useRef } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { X, MessageCircle, Bell } from 'lucide-react';
@@ -17,6 +18,7 @@ import Communaute from './Communaute';
 import Classement from './Classement';
 import StudentProgress from './StudentProgress';
 
+// ---------- NotificationToast (avec responsive) ----------
 function NotificationToast({ notification, onClose, onClick }) {
   useEffect(() => {
     const timer = setTimeout(onClose, 5000);
@@ -31,16 +33,16 @@ function NotificationToast({ notification, onClose, onClick }) {
         onClick();
         onClose();
       }}
-      className="fixed bottom-4 right-4 z-[9999] bg-white dark:bg-slate-800 p-4 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 cursor-pointer hover:shadow-xl transition-all duration-300 animate-slide-up flex items-start gap-3 max-w-sm w-full"
+      className="fixed bottom-4 right-4 z-[9999] bg-white dark:bg-slate-800 p-3 sm:p-4 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 cursor-pointer hover:shadow-xl transition-all duration-300 animate-slide-up flex items-start gap-3 max-w-[90vw] sm:max-w-sm w-full"
     >
       <div className="flex-shrink-0 bg-blue-100 dark:bg-blue-900/30 p-2 rounded-full text-blue-600 dark:text-blue-400">
-        {isSystem ? <Bell size={20} /> : <MessageCircle size={20} />}
+        {isSystem ? <Bell size={18} className="sm:w-5 sm:h-5" /> : <MessageCircle size={18} className="sm:w-5 sm:h-5" />}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-semibold text-slate-800 dark:text-white truncate">
+        <p className="text-xs sm:text-sm font-semibold text-slate-800 dark:text-white truncate">
           {notification.title}
         </p>
-        <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+        <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">
           {notification.body}
         </p>
       </div>
@@ -57,6 +59,7 @@ function NotificationToast({ notification, onClose, onClick }) {
   );
 }
 
+// ---------- AppContent ----------
 function AppContent({ darkMode, toggleDarkMode, user }) {
   const location = useLocation();
   const navigate = useNavigate();
@@ -70,6 +73,7 @@ function AppContent({ darkMode, toggleDarkMode, user }) {
 
   const socketRef = useRef(null);
 
+  // ---- Socket.io ----
   useEffect(() => {
     if (!user || !user._id) {
       if (socketRef.current) {
@@ -102,18 +106,18 @@ function AppContent({ darkMode, toggleDarkMode, user }) {
     newSocket.on('notification', (notif) => {
       console.log('📩 Notification reçue dans App.js:', notif);
 
-      const { _id, title, body, conversationId, conversationType, conversationTitle } = notif;
+      const { _id, title, body, conversationId, conversationType, conversationTitle, data } = notif;
 
       setNotifications(prev => {
-        if (prev.some(n => n.id === _id)) return prev; 
-        const newNotifs = [{ id: _id, title, body, conversationId, conversationType, conversationTitle }, ...prev];
+        if (prev.some(n => n.id === _id)) return prev;
+        const newNotifs = [{ id: _id, title, body, conversationId, conversationType, conversationTitle, data }, ...prev];
         localStorage.setItem('notifications', JSON.stringify(newNotifs));
         return newNotifs;
       });
 
       setToastNotifications(prev => [
         ...prev,
-        { id: _id, title, body, conversationId, conversationType, conversationTitle }
+        { id: _id, title, body, conversationId, conversationType, conversationTitle, data }
       ]);
     });
 
@@ -128,6 +132,7 @@ function AppContent({ darkMode, toggleDarkMode, user }) {
     };
   }, [user]);
 
+  // ---- Chargement initial des notifications ----
   useEffect(() => {
     if (!user || !user._id) return;
     (async () => {
@@ -140,7 +145,8 @@ function AppContent({ darkMode, toggleDarkMode, user }) {
           body: n.body,
           conversationId: n.conversationId,
           conversationType: n.conversationType,
-          conversationTitle: n.conversationTitle
+          conversationTitle: n.conversationTitle,
+          data: n.data || {}
         }));
         setNotifications(mapped);
         localStorage.setItem('notifications', JSON.stringify(mapped));
@@ -150,6 +156,7 @@ function AppContent({ darkMode, toggleDarkMode, user }) {
     })();
   }, [user]);
 
+  // ---- Supprimer une notification (local + API) ----
   const removeNotification = (id) => {
     setNotifications(prev => {
       const newNotifs = prev.filter(n => n.id !== id);
@@ -159,9 +166,14 @@ function AppContent({ darkMode, toggleDarkMode, user }) {
     fetch(`https://reussite-qcmss-1nc7.onrender.com/api/notifications/${id}`, { method: 'DELETE' }).catch(() => {});
   };
 
+  // ---- Gestion du clic sur une notification (avec redirection) ----
   const handleNotificationItemClick = (notif) => {
     if (user?.role === 'admin') {
       navigate('/admin/dashboard/students');
+    } else if (notif.conversationType === 'lesson' && notif.data?.lessonId && notif.data?.moduleId) {
+      // ✅ التوجيه إلى الدرس المحدد
+      navigate(`/cours/module/${notif.data.moduleId}?lessonId=${notif.data.lessonId}`);
+      removeNotification(notif.id);
     } else if (notif.conversationType === 'system') {
       navigate('/profile');
     } else if (notif.conversationId) {
@@ -172,6 +184,7 @@ function AppContent({ darkMode, toggleDarkMode, user }) {
     removeNotification(notif.id);
   };
 
+  // ---- Gestion des toasts ----
   const removeToast = (id) => {
     setToastNotifications((prev) => prev.filter(n => n.id !== id));
   };
@@ -183,9 +196,9 @@ function AppContent({ darkMode, toggleDarkMode, user }) {
   return (
     <div className="min-h-screen flex flex-col bg-gray-50 dark:bg-slate-900 transition-colors duration-300">
       {!isAdminRoute && (
-        <Navbar 
-          darkMode={darkMode} 
-          toggleDarkMode={toggleDarkMode} 
+        <Navbar
+          darkMode={darkMode}
+          toggleDarkMode={toggleDarkMode}
           notifications={notifications}
           onNotificationClick={handleNotificationItemClick}
         />
@@ -205,19 +218,20 @@ function AppContent({ darkMode, toggleDarkMode, user }) {
         <Route path="/communaute" element={user && user.isSubscribed ? <Communaute /> : <Navigate to={user ? "/subscription" : "/auth"} />} />
         <Route path="/classement" element={user && user.isSubscribed ? <Classement /> : <Navigate to={user ? "/subscription" : "/auth"} />} />
         <Route path="/progression" element={user && user.isSubscribed ? <StudentProgress /> : <Navigate to={user ? "/subscription" : "/auth"} />} />
-        
+
         <Route path="/admin/dashboard/*" element={
-          user && user.role === 'admin' 
-            ? <AdminDashboard 
-                darkMode={darkMode} 
-                toggleDarkMode={toggleDarkMode} 
+          user && user.role === 'admin'
+            ? <AdminDashboard
+                darkMode={darkMode}
+                toggleDarkMode={toggleDarkMode}
                 notifications={notifications}
                 onNotificationClick={handleNotificationItemClick}
-              /> 
+              />
             : <Navigate to="/auth" />
         } />
       </Routes>
 
+      {/* Toast notifications */}
       <div className="fixed bottom-4 left-4 right-4 sm:left-auto sm:right-4 z-[9999] space-y-3">
         {toastNotifications.map((notif) => (
           <NotificationToast
@@ -232,16 +246,16 @@ function AppContent({ darkMode, toggleDarkMode, user }) {
   );
 }
 
+// ---------- App (composant principal) ----------
 function App() {
   const [darkMode, setDarkMode] = useState(false);
-  
-  // ✅ CORRECTION ICI : Lecture sécurisée du localStorage
+
+  // Lecture sécurisée du localStorage pour l'utilisateur
   const [user, setUser] = useState(() => {
     const storedUser = localStorage.getItem('user');
     if (!storedUser) return null;
     try {
       const parsed = JSON.parse(storedUser);
-      // On ne garde que si le rôle existe (sinon c'est des données corrompues)
       if (parsed && parsed.role) return parsed;
       localStorage.removeItem('user');
       return null;
@@ -251,31 +265,31 @@ function App() {
     }
   });
 
-  // ✅ CORRECTION ICI : Vérification automatique de la session au démarrage
+  // Vérification automatique de la session au démarrage
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token && user) {
       fetch('https://reussite-qcmss-1nc7.onrender.com/api/auth/me', {
         headers: { 'Authorization': `Bearer ${token}` }
       })
-      .then(res => {
-        if (!res.ok) throw new Error('Session invalide');
-        return res.json();
-      })
-      .then(data => {
-        // Mise à jour des données si elles ont changé sur le serveur
-        localStorage.setItem('user', JSON.stringify(data));
-        setUser(data);
-      })
-      .catch(err => {
-        console.error('Session expirée:', err);
-        localStorage.removeItem('user');
-        localStorage.removeItem('token');
-        setUser(null);
-      });
+        .then(res => {
+          if (!res.ok) throw new Error('Session invalide');
+          return res.json();
+        })
+        .then(data => {
+          localStorage.setItem('user', JSON.stringify(data));
+          setUser(data);
+        })
+        .catch(err => {
+          console.error('Session expirée:', err);
+          localStorage.removeItem('user');
+          localStorage.removeItem('token');
+          setUser(null);
+        });
     }
   }, []);
 
+  // Appliquer le mode sombre
   useEffect(() => {
     if (darkMode) document.documentElement.classList.add('dark');
     else document.documentElement.classList.remove('dark');

@@ -1,3 +1,4 @@
+// StudentProgress.js (الملف كاملاً مع التعديلات)
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -28,7 +29,7 @@ function StudentProgress() {
   const [filterPeriod, setFilterPeriod] = useState('today');
   const [chartData, setChartData] = useState([]);
 
-  // États pour les données supplémentaires (nécessaires pour retrouver les noms de modules)
+  // بيانات إضافية
   const [allModules, setAllModules] = useState([]);
   const [allLessons, setAllLessons] = useState([]);
   const [allQuizzes, setAllQuizzes] = useState([]);
@@ -45,7 +46,7 @@ function StudentProgress() {
         if (!res.ok) throw new Error('Erreur serveur');
         const data = await res.json();
 
-        // معالجة التواريخ غير الصالحة
+        // معالجة التواريخ
         const readLessons = (data.readLessons || []).map(r => ({
           ...r,
           readAt: r.readAt ? new Date(r.readAt) : null,
@@ -58,26 +59,16 @@ function StudentProgress() {
           quizId: q.quizId || { title: 'QCM sans titre', lessonId: null, moduleId: null }
         })).filter(q => q.date && !isNaN(q.date.getTime()));
 
-        const completedModules = new Set(
-          completedQuizzes
-            .filter(q => q.type === 'module')
-            .map(q => q.quizId?._id || q.quizId)
-        ).size;
-
         setStats({
           ...data,
           readLessons,
           completedQuizzes,
-          completedModules,
-          totalModules: data.totalModules || 1,
           lessonsRead: readLessons.length,
           completedLessonQCMs: completedQuizzes.filter(q => q.type === 'lesson').length,
           completedExams: completedQuizzes.filter(q => q.type === 'module' || q.type === 'simulation').length
         });
 
-        // تحضير بيانات الرسم البياني بعد جلب البيانات
-        prepareChartData(readLessons, completedQuizzes);
-
+        // تحضير البيانات بعد جلب الإضافية
         setLoading(false);
       } catch (err) {
         console.error(err);
@@ -88,7 +79,7 @@ function StudentProgress() {
     fetchStats();
   }, [user]);
 
-  // جلب البيانات الإضافية (modules, lessons, quizzes) لاستخدامها في استخراج اسم الوحدة
+  // جلب البيانات الإضافية
   useEffect(() => {
     if (!user || !user.year) return;
     const fetchExtraData = async () => {
@@ -117,6 +108,28 @@ function StudentProgress() {
     fetchExtraData();
   }, [user]);
 
+  // حساب الوحدات المكتملة والكلية
+  useEffect(() => {
+    if (allModules.length === 0 || allQuizzes.length === 0) return;
+    const completedQuizIds = (stats.completedQuizzes || []).map(q => String(q.quizId?._id || q.quizId));
+
+    const moduleCompletion = allModules.map(mod => {
+      const moduleQuizzes = allQuizzes.filter(q => q.moduleId?._id?.toString() === mod._id?.toString() && q.type === 'module');
+      const resolvedCount = moduleQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
+      const totalCount = moduleQuizzes.length;
+      return { total: totalCount, resolved: resolvedCount, isComplete: totalCount > 0 && resolvedCount === totalCount };
+    });
+
+    const totalModules = moduleCompletion.length;
+    const completedModules = moduleCompletion.filter(m => m.isComplete).length;
+
+    setStats(prev => ({
+      ...prev,
+      totalModules,
+      completedModules
+    }));
+  }, [allModules, allQuizzes, stats.completedQuizzes]);
+
   // دالة مساعدة لاستخراج اسم الوحدة من كائن quiz
   const getModuleNameFromQuiz = (quiz) => {
     if (!quiz) return 'Module inconnu';
@@ -137,32 +150,11 @@ function StudentProgress() {
       const module = allModules.find(m => m._id === moduleId);
       if (module) return module.title;
     }
-    if (quiz.lessonId) {
-      const lessonId = quiz.lessonId._id || quiz.lessonId;
-      const lesson = allLessons.find(l => l._id === lessonId);
-      if (lesson && lesson.moduleId) {
-        const moduleId = lesson.moduleId._id || lesson.moduleId;
-        const module = allModules.find(m => m._id === moduleId);
-        if (module) return module.title;
-      }
-    }
     return 'Module inconnu';
   };
 
-  // دالة لإنشاء مصفوفة من التواريخ بين تاريخين
-  const getDateRange = (startDate, endDate) => {
-    const dates = [];
-    const current = new Date(startDate);
-    const end = new Date(endDate);
-    while (current <= end) {
-      dates.push(current.toISOString().split('T')[0]);
-      current.setDate(current.getDate() + 1);
-    }
-    return dates;
-  };
-
+  // تحضير بيانات المنحنى
   const prepareChartData = (readLessons, completedQuizzes) => {
-    // تجميع البيانات حسب اليوم
     const dailyMap = {};
 
     readLessons.forEach(r => {
@@ -179,7 +171,6 @@ function StudentProgress() {
       dailyMap[key].quizzes++;
     });
 
-    // تحديد نطاق التواريخ حسب الفلتر
     const now = new Date();
     let startDate, endDate = new Date();
 
@@ -204,7 +195,6 @@ function StudentProgress() {
         startDate.setHours(0, 0, 0, 0);
         break;
       default: // 'all'
-        // نأخذ أول تاريخ موجود في البيانات
         const allDates = Object.keys(dailyMap).sort();
         if (allDates.length === 0) {
           setChartData([]);
@@ -215,15 +205,14 @@ function StudentProgress() {
         break;
     }
 
-    // توليد جميع أيام الفترة
-    let dateRange;
-    if (filterPeriod === 'all') {
-      dateRange = getDateRange(startDate, endDate);
-    } else {
-      dateRange = getDateRange(startDate, endDate);
+    // توليد جميع الأيام بين startDate و endDate
+    const dateRange = [];
+    const current = new Date(startDate);
+    while (current <= endDate) {
+      dateRange.push(current.toISOString().split('T')[0]);
+      current.setDate(current.getDate() + 1);
     }
 
-    // بناء البيانات مع تعبئة الأيام الفارغة بقيمة 0
     const result = dateRange.map(date => ({
       date,
       lessons: dailyMap[date]?.lessons || 0,
@@ -233,15 +222,16 @@ function StudentProgress() {
     setChartData(result);
   };
 
-  // إعادة تحضير البيانات عند تغيير الفلتر
+  // إعادة تحضير البيانات عند تغيير الفلتر أو تغير البيانات
   useEffect(() => {
     if (stats.readLessons.length > 0 || stats.completedQuizzes.length > 0) {
       prepareChartData(stats.readLessons, stats.completedQuizzes);
     }
-  }, [filterPeriod]);
+  }, [filterPeriod, stats.readLessons, stats.completedQuizzes]);
 
   const getPeriodLabel = () => {
     switch (filterPeriod) {
+      case 'today': return "Aujourd'hui";
       case 'week': return 'Cette semaine';
       case 'month': return 'Ce mois-ci';
       case 'year': return 'Cette année';
@@ -258,7 +248,7 @@ function StudentProgress() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 md:p-8">
       <div className="max-w-6xl mx-auto">
-        {/* Header avec retour */}
+        {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <button
             onClick={() => navigate('/profile')}
@@ -282,7 +272,7 @@ function StudentProgress() {
           <Filter size={18} className="text-slate-400" />
           <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Période :</span>
           <div className="flex flex-wrap gap-2">
-            {['week', 'month', 'year', 'all'].map(p => (
+            {['today', 'week', 'month', 'year', 'all'].map(p => (
               <button
                 key={p}
                 onClick={() => setFilterPeriod(p)}
@@ -292,7 +282,7 @@ function StudentProgress() {
                     : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600'
                 }`}
               >
-                {p === 'week' ? 'Semaine' : p === 'month' ? 'Mois' : p === 'year' ? 'Année' : 'Tout'}
+                {p === 'today' ? "Aujourd'hui" : p === 'week' ? 'Semaine' : p === 'month' ? 'Mois' : p === 'year' ? 'Année' : 'Tout'}
               </button>
             ))}
           </div>
@@ -333,7 +323,7 @@ function StudentProgress() {
               <div>
                 <p className="text-xs text-slate-500">Modules complétés</p>
                 <p className="text-xl font-bold text-slate-800 dark:text-white">
-                  {stats.completedModules || 0}/{stats.totalModules || 1}
+                  {stats.completedModules || 0}/{stats.totalModules || 0}
                 </p>
               </div>
             </div>
@@ -385,35 +375,43 @@ function StudentProgress() {
           </div>
         )}
 
-        {/* Détails : Cours et QCMs (Modules supprimé) */}
+        {/* Détails : Cours et QCMs */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Cours */}
+          {/* Cours lus avec nom du module */}
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
             <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
               <BookOpen size={18} className="text-blue-600" /> Cours lus
             </h4>
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {stats.readLessons?.length > 0 ? (
-                stats.readLessons.map((r, i) => (
-                  <div key={i} className="flex items-center gap-2 text-sm p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                    <CheckCircle size={14} className="text-green-600" />
-                    <span className="text-slate-700 dark:text-slate-300 truncate">
-                      {r.lessonId?.title || 'Cours sans titre'}
-                    </span>
-                    {r.lessonId?.moduleId?.title && (
-                      <span className="text-xs text-slate-400 ml-auto">
-                        {r.lessonId.moduleId.title}
+                stats.readLessons.map((r, i) => {
+                  // استخراج اسم الوحدة
+                  const lessonId = r.lessonId?._id || r.lessonId;
+                  const lesson = allLessons.find(l => l._id === lessonId);
+                  const moduleId = lesson?.moduleId?._id || lesson?.moduleId;
+                  const module = allModules.find(m => m._id === moduleId);
+                  const moduleName = module?.title || '';
+                  return (
+                    <div key={i} className="flex items-center gap-2 text-sm p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                      <CheckCircle size={14} className="text-green-600" />
+                      <span className="text-slate-700 dark:text-slate-300 truncate">
+                        {r.lessonId?.title || 'Cours sans titre'}
                       </span>
-                    )}
-                  </div>
-                ))
+                      {moduleName && (
+                        <span className="text-xs text-blue-600 dark:text-blue-400 ml-auto">
+                          {moduleName}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })
               ) : (
                 <p className="text-xs text-slate-400">Aucun cours lu.</p>
               )}
             </div>
           </div>
 
-          {/* QCMs */}
+          {/* QCMs résolus */}
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
             <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
               <Zap size={18} className="text-yellow-600" /> QCMs résolus
@@ -422,7 +420,6 @@ function StudentProgress() {
               {stats.completedQuizzes?.length > 0 ? (
                 stats.completedQuizzes.map((q, i) => {
                   const typeLabel = q.type === 'module' ? 'Examen' : q.type === 'simulation' ? 'Simulation' : 'QCM cours';
-                  // استخراج اسم المادة والدرس باستخدام الدالة المساعدة
                   const moduleName = getModuleNameFromQuiz(q.quizId || q);
                   const lessonName = q.quizId?.lessonId?.title || '';
                   return (
@@ -442,7 +439,7 @@ function StudentProgress() {
           </div>
         </div>
 
-        {/* Bouton retour vers les cours */}
+        {/* Bouton retour */}
         <div className="mt-8 text-center">
           <button
             onClick={() => navigate('/cours')}
