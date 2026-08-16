@@ -1,5 +1,5 @@
-// StudentProgress.js (الملف كاملاً مع التعديلات)
-import React, { useState, useEffect } from 'react';
+// StudentProgress.js
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   BarChart2, BookOpen, CheckCircle, Clock, Calendar, Filter,
@@ -22,18 +22,40 @@ function StudentProgress() {
     totalLessons: 0,
     readLessons: [],
     completedQuizzes: [],
-    totalModules: 0,
-    completedModules: 0
   });
   const [loading, setLoading] = useState(true);
   const [filterPeriod, setFilterPeriod] = useState('today');
   const [chartData, setChartData] = useState([]);
 
-  // بيانات إضافية
+  // بيانات إضافية (موديولات، دروس، QCMs)
   const [allModules, setAllModules] = useState([]);
   const [allLessons, setAllLessons] = useState([]);
   const [allQuizzes, setAllQuizzes] = useState([]);
+  const [extraLoading, setExtraLoading] = useState(true);
 
+  // --- حساب الوحدات المكتملة والكلية باستخدام useMemo ---
+  const moduleStats = useMemo(() => {
+    if (allModules.length === 0 || allQuizzes.length === 0 || stats.completedQuizzes.length === 0) {
+      return { totalModules: 0, completedModules: 0 };
+    }
+
+    const completedQuizIds = stats.completedQuizzes.map(q => String(q.quizId?._id || q.quizId));
+
+    let total = 0;
+    let completed = 0;
+
+    allModules.forEach(mod => {
+      const moduleQuizzes = allQuizzes.filter(q => q.moduleId?._id?.toString() === mod._id?.toString() && q.type === 'module');
+      if (moduleQuizzes.length === 0) return; // لا نحتسب الموديولات التي ليس لها QCMs
+      total++;
+      const resolvedCount = moduleQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
+      if (resolvedCount === moduleQuizzes.length) completed++;
+    });
+
+    return { totalModules: total, completedModules: completed };
+  }, [allModules, allQuizzes, stats.completedQuizzes]);
+
+  // --- تحميل بيانات المستخدم ---
   useEffect(() => {
     if (!user || !user._id) {
       navigate('/auth');
@@ -68,7 +90,6 @@ function StudentProgress() {
           completedExams: completedQuizzes.filter(q => q.type === 'module' || q.type === 'simulation').length
         });
 
-        // تحضير البيانات بعد جلب الإضافية
         setLoading(false);
       } catch (err) {
         console.error(err);
@@ -79,10 +100,11 @@ function StudentProgress() {
     fetchStats();
   }, [user]);
 
-  // جلب البيانات الإضافية
+  // --- تحميل البيانات الإضافية (موديولات، دروس، QCMs) ---
   useEffect(() => {
     if (!user || !user.year) return;
     const fetchExtraData = async () => {
+      setExtraLoading(true);
       try {
         const modulesRes = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/modules?year=${user.year}`);
         const modulesData = await modulesRes.json();
@@ -103,34 +125,14 @@ function StudentProgress() {
         setAllQuizzes(allQuizzesData);
       } catch (err) {
         console.error('Erreur chargement données extra:', err);
+      } finally {
+        setExtraLoading(false);
       }
     };
     fetchExtraData();
   }, [user]);
 
-  // حساب الوحدات المكتملة والكلية
-  useEffect(() => {
-    if (allModules.length === 0 || allQuizzes.length === 0) return;
-    const completedQuizIds = (stats.completedQuizzes || []).map(q => String(q.quizId?._id || q.quizId));
-
-    const moduleCompletion = allModules.map(mod => {
-      const moduleQuizzes = allQuizzes.filter(q => q.moduleId?._id?.toString() === mod._id?.toString() && q.type === 'module');
-      const resolvedCount = moduleQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
-      const totalCount = moduleQuizzes.length;
-      return { total: totalCount, resolved: resolvedCount, isComplete: totalCount > 0 && resolvedCount === totalCount };
-    });
-
-    const totalModules = moduleCompletion.length;
-    const completedModules = moduleCompletion.filter(m => m.isComplete).length;
-
-    setStats(prev => ({
-      ...prev,
-      totalModules,
-      completedModules
-    }));
-  }, [allModules, allQuizzes, stats.completedQuizzes]);
-
-  // دالة مساعدة لاستخراج اسم الوحدة من كائن quiz
+  // --- دالة مساعدة لاستخراج اسم الوحدة من كائن quiz ---
   const getModuleNameFromQuiz = (quiz) => {
     if (!quiz) return 'Module inconnu';
     if (quiz.moduleId && typeof quiz.moduleId === 'object' && quiz.moduleId.title) {
@@ -153,8 +155,9 @@ function StudentProgress() {
     return 'Module inconnu';
   };
 
-  // تحضير بيانات المنحنى
-  const prepareChartData = (readLessons, completedQuizzes) => {
+  // --- تحضير بيانات المنحنى ---
+  const prepareChartData = (readLessons, completedQuizzes, filter) => {
+    // تجميع البيانات يومياً
     const dailyMap = {};
 
     readLessons.forEach(r => {
@@ -171,35 +174,39 @@ function StudentProgress() {
       dailyMap[key].quizzes++;
     });
 
+    // تحديد النطاق الزمني حسب الفلتر
     const now = new Date();
     let startDate, endDate = new Date();
 
-    switch (filterPeriod) {
+    switch (filter) {
       case 'today':
         startDate = new Date(now);
         startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(now);
+        endDate.setHours(23, 59, 59, 999);
         break;
       case 'week':
         startDate = new Date(now);
         startDate.setDate(now.getDate() - 6);
         startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(now);
+        endDate.setHours(23, 59, 59, 999);
         break;
       case 'month':
-        startDate = new Date(now);
-        startDate.setDate(1);
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
         startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+        endDate.setHours(23, 59, 59, 999);
         break;
       case 'year':
-        startDate = new Date(now);
-        startDate.setMonth(0, 1);
+        startDate = new Date(now.getFullYear(), 0, 1);
         startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(now.getFullYear(), 11, 31);
+        endDate.setHours(23, 59, 59, 999);
         break;
       default: // 'all'
         const allDates = Object.keys(dailyMap).sort();
-        if (allDates.length === 0) {
-          setChartData([]);
-          return;
-        }
+        if (allDates.length === 0) return [];
         startDate = new Date(allDates[0]);
         endDate = new Date(allDates[allDates.length - 1]);
         break;
@@ -213,20 +220,24 @@ function StudentProgress() {
       current.setDate(current.getDate() + 1);
     }
 
+    // بناء النتيجة مع تعبئة الأيام الفارغة بقيمة 0
     const result = dateRange.map(date => ({
       date,
       lessons: dailyMap[date]?.lessons || 0,
       quizzes: dailyMap[date]?.quizzes || 0
     }));
 
-    setChartData(result);
+    return result;
   };
 
-  // إعادة تحضير البيانات عند تغيير الفلتر أو تغير البيانات
+  // --- تحديث المنحنى عند تغيير الفلتر أو البيانات ---
   useEffect(() => {
-    if (stats.readLessons.length > 0 || stats.completedQuizzes.length > 0) {
-      prepareChartData(stats.readLessons, stats.completedQuizzes);
+    if (stats.readLessons.length === 0 && stats.completedQuizzes.length === 0) {
+      setChartData([]);
+      return;
     }
+    const data = prepareChartData(stats.readLessons, stats.completedQuizzes, filterPeriod);
+    setChartData(data);
   }, [filterPeriod, stats.readLessons, stats.completedQuizzes]);
 
   const getPeriodLabel = () => {
@@ -239,11 +250,14 @@ function StudentProgress() {
     }
   };
 
-  if (loading) return (
+  if (loading || extraLoading) return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-10 flex items-center justify-center">
       <div className="text-center text-slate-500">Chargement de votre progression...</div>
     </div>
   );
+
+  // --- حساب نسبة التقدم الكلية (إذا أردت استخدامها) ---
+  const progress = stats.totalLessons > 0 ? Math.round((stats.lessonsRead / stats.totalLessons) * 100) : 0;
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 md:p-8">
@@ -323,7 +337,7 @@ function StudentProgress() {
               <div>
                 <p className="text-xs text-slate-500">Modules complétés</p>
                 <p className="text-xl font-bold text-slate-800 dark:text-white">
-                  {stats.completedModules || 0}/{stats.totalModules || 0}
+                  {moduleStats.completedModules || 0}/{moduleStats.totalModules || 0}
                 </p>
               </div>
             </div>
