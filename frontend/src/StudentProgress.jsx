@@ -35,7 +35,14 @@ function StudentProgress() {
   const [extraLoading, setExtraLoading] = useState(true);
   const extraFetched = useRef(false);
 
-  // --- حساب الوحدات المكتملة والكلية باستخدام useMemo ---
+  // --- حساب متوسط النقاط (Score moyen) ---
+  const averageScore = useMemo(() => {
+    if (stats.completedQuizzes.length === 0) return null;
+    const total = stats.completedQuizzes.reduce((acc, q) => acc + (q.score || 0), 0);
+    return Math.round(total / stats.completedQuizzes.length);
+  }, [stats.completedQuizzes]);
+
+  // --- حساب الوحدات المكتملة (للاحتفاظ بها إن أردت استخدامها في مكان آخر) ---
   const moduleStats = useMemo(() => {
     if (allModules.length === 0 || allQuizzes.length === 0 || stats.completedQuizzes.length === 0) {
       return { totalModules: 0, completedModules: 0 };
@@ -47,12 +54,10 @@ function StudentProgress() {
     let completed = 0;
 
     allModules.forEach(mod => {
-      // نأخذ فقط QCMs من نوع 'module' المرتبطة بهذا الموديول
       const moduleQuizzes = allQuizzes.filter(q => 
         q.moduleId?._id?.toString() === mod._id?.toString() && 
         q.type === 'module'
       );
-      // إذا كان الموديول ليس له QCMs من نوع module، نتجاوزه (لا نحتسبه)
       if (moduleQuizzes.length === 0) return;
       total++;
       const resolvedCount = moduleQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
@@ -187,9 +192,8 @@ function StudentProgress() {
 
     switch (filter) {
       case 'week': {
-        // الأسبوع الحالي: يبدأ من يوم الإثنين إلى يوم الأحد
-        const dayOfWeek = now.getDay(); // 0 = dimanche, 1 = lundi, ...
-        const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1); // عدد الأيام للرجوع إلى الإثنين
+        const dayOfWeek = now.getDay();
+        const diffToMonday = (dayOfWeek === 0 ? 6 : dayOfWeek - 1);
         startDate = new Date(now);
         startDate.setDate(now.getDate() - diffToMonday);
         startDate.setHours(0, 0, 0, 0);
@@ -221,7 +225,6 @@ function StudentProgress() {
       }
     }
 
-    // توليد جميع الأيام بين startDate و endDate
     const dateRange = [];
     const current = new Date(startDate);
     while (current <= endDate) {
@@ -335,13 +338,14 @@ function StudentProgress() {
               </div>
             </div>
           </div>
+          {/* ✅ استبدال Modules complétés بـ Score moyen */}
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
             <div className="flex items-center gap-3">
               <Award size={20} className="text-green-600" />
               <div>
-                <p className="text-xs text-slate-500">Modules complétés</p>
+                <p className="text-xs text-slate-500">Score moyen</p>
                 <p className="text-xl font-bold text-slate-800 dark:text-white">
-                  {moduleStats.completedModules || 0}/{moduleStats.totalModules || 0}
+                  {averageScore !== null ? `${averageScore}%` : '—'}
                 </p>
               </div>
             </div>
