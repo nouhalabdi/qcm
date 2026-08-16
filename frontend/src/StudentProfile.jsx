@@ -200,31 +200,90 @@ function StudentProfile() {
     fetchStats();
   }, [user, navigate]);
 
-  // ---------- Chargement des données supplémentaires une seule fois ----------
+  // ---------- Chargement des données supplémentaires avec cache localStorage ----------
   useEffect(() => {
     if (!user || !user.year || extraFetched.current) return;
     extraFetched.current = true;
 
+    const CACHE_KEY = `profile_extra_${user.year}`;
+    const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes
+
+    const loadFromCache = () => {
+      try {
+        const cached = localStorage.getItem(CACHE_KEY);
+        if (cached) {
+          const { data, timestamp } = JSON.parse(cached);
+          if (Date.now() - timestamp < CACHE_EXPIRY) {
+            return data;
+          }
+        }
+      } catch (e) {}
+      return null;
+    };
+
+    const saveToCache = (data) => {
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
+      } catch (e) {}
+    };
+
     const fetchExtraData = async () => {
       setLoadingExtra(true);
+
+      // Vérifier le cache
+      const cachedData = loadFromCache();
+      if (cachedData) {
+        setModules(cachedData.modules);
+        setAllLessons(cachedData.allLessons);
+        setAllQuizzes(cachedData.allQuizzes);
+        setLoadingExtra(false);
+        return;
+      }
+
       try {
+        // جلب الموديولات
         const modulesRes = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/modules?year=${user.year}`);
         const modulesData = await modulesRes.json();
         setModules(modulesData);
 
+        // جلب الدروس و QCMs بالتوازي مع Promise.allSettled
         const lessonsPromises = modulesData.map(mod =>
           fetch(`https://reussite-qcmss-1nc7.onrender.com/api/lessons?moduleId=${mod._id}`).then(r => r.json())
         );
-        const lessonsArrays = await Promise.all(lessonsPromises);
-        const allLessonsData = lessonsArrays.flat();
-        setAllLessons(allLessonsData);
-
         const quizzesPromises = modulesData.map(mod =>
           fetch(`https://reussite-qcmss-1nc7.onrender.com/api/quizzes?moduleId=${mod._id}`).then(r => r.json())
         );
-        const quizzesArrays = await Promise.all(quizzesPromises);
-        const allQuizzesData = quizzesArrays.flat();
+
+        const [lessonsResults, quizzesResults] = await Promise.allSettled([
+          Promise.all(lessonsPromises),
+          Promise.all(quizzesPromises)
+        ]);
+
+        let allLessonsData = [];
+        let allQuizzesData = [];
+
+        if (lessonsResults.status === 'fulfilled') {
+          allLessonsData = lessonsResults.value.flat();
+        } else {
+          console.warn('Erreur chargement des leçons:', lessonsResults.reason);
+        }
+
+        if (quizzesResults.status === 'fulfilled') {
+          allQuizzesData = quizzesResults.value.flat();
+        } else {
+          console.warn('Erreur chargement des QCMs:', quizzesResults.reason);
+        }
+
+        setAllLessons(allLessonsData);
         setAllQuizzes(allQuizzesData);
+
+        // Sauvegarder dans le cache
+        saveToCache({
+          modules: modulesData,
+          allLessons: allLessonsData,
+          allQuizzes: allQuizzesData
+        });
+
       } catch (err) {
         console.error('Erreur chargement données supplémentaires:', err);
       } finally {
@@ -364,22 +423,19 @@ function StudentProfile() {
     return stats.completedQuizzes.map(q => q.quizId?._id?.toString() || q.quizId?.toString()).filter(Boolean);
   }, [stats.completedQuizzes]);
 
-  // حساب تقدم الموديولات: عدد الدروس الكلية والمقروءة، وعدد QCMs من نوع module
+  // حساب تقدم الموديولات
   const moduleProgress = useMemo(() => {
     if (modules.length === 0 || allLessons.length === 0 || allQuizzes.length === 0) return [];
 
     return modules.map(mod => {
-      // الدروس الخاصة بهذا الموديول
       const modLessons = allLessons.filter(l => l.moduleId?._id?.toString() === mod._id?.toString());
       const totalLessons = modLessons.length;
       const readLessonsCount = modLessons.filter(l => readLessonIds.includes(l._id?.toString())).length;
 
-      // QCMs من نوع module لهذا الموديول
       const modQuizzes = allQuizzes.filter(q => q.moduleId?._id?.toString() === mod._id?.toString() && q.type === 'module');
       const totalQuizzes = modQuizzes.length;
       const completedQuizzesCount = modQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
 
-      // يعتبر الموديول مكتملاً إذا كانت جميع الدروس مقروءة وجميع QCMs من نوع module منجزة
       const isComplete = (totalLessons > 0 && readLessonsCount === totalLessons) &&
                          (totalQuizzes > 0 && completedQuizzesCount === totalQuizzes);
 
@@ -394,10 +450,8 @@ function StudentProfile() {
     });
   }, [modules, allLessons, allQuizzes, readLessonIds, completedQuizIds]);
 
-  // فلترة الموديولات غير المكتملة فقط
   const incompleteModules = moduleProgress.filter(m => !m.isComplete);
 
-  // ----- فلترة الدروس والـ QCMs غير المنجزة (للعرض في الأقسام الأخرى) -----
   const lessonStatus = useMemo(() => {
     return allLessons.map(lesson => ({
       ...lesson,
@@ -415,11 +469,42 @@ function StudentProfile() {
   const unreadLessons = lessonStatus.filter(l => !l.isRead);
   const unresolvedQuizzes = quizStatus.filter(q => !q.isResolved && (q.type === 'lesson' || q.type === 'module'));
 
-  // ---------- عرض التحميل ----------
-  if (loading || loadingExtra) {
+  // ---------- Skeleton de chargement ----------
+  if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-10 flex items-center justify-center">
-        <div className="text-center text-slate-500">Chargement de votre profil...</div>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 md:p-8">
+        <div className="max-w-5xl mx-auto space-y-6 animate-pulse">
+          <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 md:p-8">
+            <div className="flex flex-col items-center">
+              <div className="w-20 h-20 rounded-full bg-slate-200 dark:bg-slate-700"></div>
+              <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-48 mt-4"></div>
+              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-32 mt-2"></div>
+            </div>
+            <div className="flex flex-wrap justify-center gap-6 mt-6">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-8 bg-slate-200 dark:bg-slate-700 rounded-full w-32"></div>
+              ))}
+            </div>
+          </div>
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6">
+            <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-48 mb-4"></div>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="text-center">
+                  <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-16 mx-auto"></div>
+                  <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-12 mx-auto mt-1"></div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6">
+            <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-32 mb-4"></div>
+            <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6">
+              <div className="h-64 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
+              <div className="h-64 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -439,7 +524,6 @@ function StudentProfile() {
             {user?.pseudo && <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">@{user.pseudo}</p>}
           </div>
 
-          {/* عرض معلومات المستخدم */}
           <div className="flex flex-wrap justify-center gap-6 text-sm text-slate-600 dark:text-slate-300 mb-6">
             <div className="flex items-center gap-2 bg-white/60 dark:bg-slate-800/60 px-4 py-1.5 rounded-full shadow-sm backdrop-blur-sm"><MapPin size={16} className="text-blue-600 dark:text-blue-400" /><span>Université de Sétif</span></div>
             <div className="flex items-center gap-2 bg-white/60 dark:bg-slate-800/60 px-4 py-1.5 rounded-full shadow-sm backdrop-blur-sm"><GraduationCap size={16} className="text-blue-600 dark:text-blue-400" /><span>Médecine Dentaire</span></div>
@@ -450,7 +534,6 @@ function StudentProfile() {
             </div>
           </div>
 
-          {/* Section édition du profil */}
           <div className="flex flex-col items-center gap-4 mt-2">
             <div className="flex justify-center w-full">
               {isEditing ? (
@@ -701,7 +784,7 @@ function StudentProfile() {
               </div>
             </div>
 
-            {/* Modules (uniquement les non complets) - version simplifiée */}
+            {/* Modules */}
             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
               <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
                 <Award size={18} className="text-purple-600" /> Modules
@@ -728,7 +811,7 @@ function StudentProfile() {
                     )}
                     {showAllModules && incompleteModules.length > 5 && (
                       <button onClick={() => setShowAllModules(false)} className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
-                        Voir moins <ChevronUp size={14} />
+                        voir moins <ChevronUp size={14} />
                       </button>
                     )}
                   </div>
