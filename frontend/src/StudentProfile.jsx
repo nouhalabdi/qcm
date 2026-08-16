@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+// StudentProfile.js
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  BookOpen, CheckCircle, BarChart2, LogOut, Edit, Save, X,
-  Heart, ListTodo, StickyNote, Calendar as CalendarIcon, Video, FileText, Pencil, Trash2,
-  MapPin, GraduationCap, Calendar, Plus, ArrowRight, Clock, Zap, Award, TrendingUp,
-  AlertCircle, ChevronDown, ChevronUp, Phone  // ✅ إضافة Phone
+  BookOpen, CheckCircle, LogOut, Edit, Save, X,
+  Heart, ListTodo, StickyNote, Calendar as CalendarIcon, FileText, Pencil, Trash2,
+  MapPin, GraduationCap, Calendar, ArrowRight, Clock, Zap, Award, TrendingUp,
+  ChevronDown, ChevronUp, Phone
 } from 'lucide-react';
 
 // --- Fonctions d'aide pour le calendrier ---
@@ -133,6 +134,7 @@ function StudentProfile() {
   const [allLessons, setAllLessons] = useState([]);
   const [allQuizzes, setAllQuizzes] = useState([]);
   const [loadingExtra, setLoadingExtra] = useState(true);
+  const extraFetched = useRef(false);
 
   // États pour les statistiques du jour
   const [periodStats, setPeriodStats] = useState({
@@ -198,19 +200,18 @@ function StudentProfile() {
     fetchStats();
   }, [user, navigate]);
 
-  // ---------- Chargement des données supplémentaires (modules, leçons, QCMs) ----------
+  // ---------- Chargement des données supplémentaires une seule fois ----------
   useEffect(() => {
-    if (!user || !user.year) return;
+    if (!user || !user.year || extraFetched.current) return;
+    extraFetched.current = true;
 
     const fetchExtraData = async () => {
       setLoadingExtra(true);
       try {
-        // 1. Récupérer tous les modules de l'année de l'utilisateur
         const modulesRes = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/modules?year=${user.year}`);
         const modulesData = await modulesRes.json();
         setModules(modulesData);
 
-        // 2. Récupérer toutes les leçons de ces modules
         const lessonsPromises = modulesData.map(mod =>
           fetch(`https://reussite-qcmss-1nc7.onrender.com/api/lessons?moduleId=${mod._id}`).then(r => r.json())
         );
@@ -218,17 +219,15 @@ function StudentProfile() {
         const allLessonsData = lessonsArrays.flat();
         setAllLessons(allLessonsData);
 
-        // 3. Récupérer tous les QCMs (pour chaque module, type module et simulation, et pour chaque leçon)
         const quizzesPromises = modulesData.map(mod =>
           fetch(`https://reussite-qcmss-1nc7.onrender.com/api/quizzes?moduleId=${mod._id}`).then(r => r.json())
         );
         const quizzesArrays = await Promise.all(quizzesPromises);
         const allQuizzesData = quizzesArrays.flat();
         setAllQuizzes(allQuizzesData);
-
-        setLoadingExtra(false);
       } catch (err) {
         console.error('Erreur chargement données supplémentaires:', err);
+      } finally {
         setLoadingExtra(false);
       }
     };
@@ -321,11 +320,9 @@ function StudentProfile() {
   // ---------- Fonctions utilitaires pour récupérer le nom du module ----------
   const getModuleNameFromQuiz = (quiz) => {
     if (!quiz) return 'Module inconnu';
-    // Si le module est déjà peuplé
     if (quiz.moduleId && typeof quiz.moduleId === 'object' && quiz.moduleId.title) {
       return quiz.moduleId.title;
     }
-    // Si le quiz a un lessonId
     if (quiz.lessonId) {
       const lessonId = quiz.lessonId._id || quiz.lessonId;
       const lesson = allLessons.find(l => l._id === lessonId);
@@ -335,18 +332,10 @@ function StudentProfile() {
         if (module) return module.title;
       }
     }
-    // Si le quiz a un moduleId direct (non peuplé)
     if (quiz.moduleId) {
       const moduleId = quiz.moduleId._id || quiz.moduleId;
       const module = modules.find(m => m._id === moduleId);
       if (module) return module.title;
-    }
-    // Dernier recours : chercher le module via le quiz lui-même
-    if (quiz._id) {
-      const foundQuiz = allQuizzes.find(q => q._id === quiz._id);
-      if (foundQuiz) {
-        return getModuleNameFromQuiz(foundQuiz);
-      }
     }
     return 'Module inconnu';
   };
@@ -366,55 +355,61 @@ function StudentProfile() {
     return 'Module inconnu';
   };
 
-  // ---------- Fonctions utilitaires pour le résumé ----------
-  // Récupérer les IDs des QCMs résolus
-  const completedQuizIds = stats.completedQuizzes.map(q => q.quizId?._id?.toString() || q.quizId?.toString()).filter(Boolean);
-  // Récupérer les IDs des leçons lues
-  const readLessonIds = stats.readLessons.map(r => r.lessonId?._id?.toString() || r.lessonId?.toString()).filter(Boolean);
+  // ---------- حساب الحالات باستخدام useMemo ----------
+  const readLessonIds = useMemo(() => {
+    return stats.readLessons.map(r => r.lessonId?._id?.toString() || r.lessonId?.toString()).filter(Boolean);
+  }, [stats.readLessons]);
 
-  // Pour chaque module, déterminer s'il est complété (tous les QCMs de type module résolus)
-  const moduleCompletionStatus = modules.map(mod => {
-    const moduleQuizzes = allQuizzes.filter(q => q.moduleId?._id?.toString() === mod._id?.toString() && q.type === 'module');
-    const resolvedCount = moduleQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
-    const totalCount = moduleQuizzes.length;
-    return {
-      ...mod,
-      totalQuizzes: totalCount,
-      resolvedQuizzes: resolvedCount,
-      isComplete: totalCount > 0 && resolvedCount === totalCount
-    };
-  });
+  const completedQuizIds = useMemo(() => {
+    return stats.completedQuizzes.map(q => q.quizId?._id?.toString() || q.quizId?.toString()).filter(Boolean);
+  }, [stats.completedQuizzes]);
 
-  // Pour chaque leçon, déterminer si elle est lue
-  const lessonStatus = allLessons.map(lesson => ({
-    ...lesson,
-    isRead: readLessonIds.includes(lesson._id?.toString())
-  }));
+  const lessonStatus = useMemo(() => {
+    return allLessons.map(lesson => ({
+      ...lesson,
+      isRead: readLessonIds.includes(lesson._id?.toString())
+    }));
+  }, [allLessons, readLessonIds]);
 
-  // Pour chaque QCM (de type lesson ou module), déterminer s'il est résolu
-  const quizStatus = allQuizzes.map(quiz => ({
-    ...quiz,
-    isResolved: completedQuizIds.includes(quiz._id?.toString())
-  }));
+  const quizStatus = useMemo(() => {
+    return allQuizzes.map(quiz => ({
+      ...quiz,
+      isResolved: completedQuizIds.includes(quiz._id?.toString())
+    }));
+  }, [allQuizzes, completedQuizIds]);
 
-  // Filtrer les leçons non lues
+  const moduleCompletionStatus = useMemo(() => {
+    if (modules.length === 0 || allQuizzes.length === 0 || stats.completedQuizzes.length === 0) {
+      return [];
+    }
+    return modules.map(mod => {
+      const moduleQuizzes = allQuizzes.filter(q => q.moduleId?._id?.toString() === mod._id?.toString() && q.type === 'module');
+      const resolvedCount = moduleQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
+      const totalCount = moduleQuizzes.length;
+      return {
+        ...mod,
+        totalQuizzes: totalCount,
+        resolvedQuizzes: resolvedCount,
+        isComplete: totalCount > 0 && resolvedCount === totalCount
+      };
+    });
+  }, [modules, allQuizzes, stats.completedQuizzes]);
+
+  // فلترة النتائج
   const unreadLessons = lessonStatus.filter(l => !l.isRead);
-  const readLessonsList = lessonStatus.filter(l => l.isRead);
-
-  // Filtrer les QCMs non résolus (uniquement ceux de type lesson et module)
   const unresolvedQuizzes = quizStatus.filter(q => !q.isResolved && (q.type === 'lesson' || q.type === 'module'));
-  const resolvedQuizzes = quizStatus.filter(q => q.isResolved && (q.type === 'lesson' || q.type === 'module'));
-
-  // Modules non complets
   const incompleteModules = moduleCompletionStatus.filter(m => !m.isComplete);
-  const completeModules = moduleCompletionStatus.filter(m => m.isComplete);
 
-  if (loading || loadingExtra) return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-10 flex items-center justify-center">
-      <div className="text-center text-slate-500">Chargement de votre profil...</div>
-    </div>
-  );
+  // ---------- عرض التحميل ----------
+  if (loading || loadingExtra) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-10 flex items-center justify-center">
+        <div className="text-center text-slate-500">Chargement de votre profil...</div>
+      </div>
+    );
+  }
 
+  // ---------- JSX ----------
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 md:p-8">
       <div className="max-w-5xl mx-auto space-y-6">
@@ -429,12 +424,11 @@ function StudentProfile() {
             {user?.pseudo && <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">@{user.pseudo}</p>}
           </div>
 
-          {/* ✅ عرض معلومات المستخدم (بما فيها رقم الهاتف) */}
+          {/* عرض معلومات المستخدم */}
           <div className="flex flex-wrap justify-center gap-6 text-sm text-slate-600 dark:text-slate-300 mb-6">
             <div className="flex items-center gap-2 bg-white/60 dark:bg-slate-800/60 px-4 py-1.5 rounded-full shadow-sm backdrop-blur-sm"><MapPin size={16} className="text-blue-600 dark:text-blue-400" /><span>Université de Sétif</span></div>
             <div className="flex items-center gap-2 bg-white/60 dark:bg-slate-800/60 px-4 py-1.5 rounded-full shadow-sm backdrop-blur-sm"><GraduationCap size={16} className="text-blue-600 dark:text-blue-400" /><span>Médecine Dentaire</span></div>
             <div className="flex items-center gap-2 bg-white/60 dark:bg-slate-800/60 px-4 py-1.5 rounded-full shadow-sm backdrop-blur-sm"><Calendar size={16} className="text-blue-600 dark:text-blue-400" /><span>{user?.year}</span></div>
-            {/* ✅ إضافة رقم الهاتف */}
             <div className="flex items-center gap-2 bg-white/60 dark:bg-slate-800/60 px-4 py-1.5 rounded-full shadow-sm backdrop-blur-sm">
               <Phone size={16} className="text-blue-600 dark:text-blue-400" />
               <span>{user?.phone || 'Non renseigné'}</span>
@@ -464,55 +458,54 @@ function StudentProfile() {
               </form>
             )}
           </div>
-
-          
         </div>
+
         {/* ---------- Bouton "Étudions maintenant" ---------- */}
-          <div className="flex justify-center mt-6">
+        <div className="flex justify-center mt-6">
+          <button
+            onClick={() => navigate('/cours')}
+            className="w-full max-w-md py-4 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white text-lg font-bold rounded-2xl shadow-lg shadow-green-500/30 transition flex items-center justify-center gap-3"
+          >
+            <BookOpen size={24} /> Étudier maintenant <ArrowRight size={20} />
+          </button>
+        </div>
+
+        {/* ---------- Statistiques du jour ---------- */}
+        <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl p-6 border border-slate-200/50 dark:border-slate-700/50 mt-6">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+              <Clock size={20} className="text-blue-600" /> Aujourd'hui
+            </h3>
             <button
-              onClick={() => navigate('/cours')}
-              className="w-full max-w-md py-4 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white text-lg font-bold rounded-2xl shadow-lg shadow-green-500/30 transition flex items-center justify-center gap-3"
+              onClick={() => navigate('/progression')}
+              className="flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium"
             >
-              <BookOpen size={24} /> Étudier maintenant <ArrowRight size={20} />
+              Voir votre progression <ArrowRight size={16} />
             </button>
           </div>
-
-          {/* ---------- Statistiques du jour ---------- */}
-          <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl p-6 border border-slate-200/50 dark:border-slate-700/50 mt-6">
-            <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
-              <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                <Clock size={20} className="text-blue-600" /> Aujourd'hui
-              </h3>
-              <button
-                onClick={() => navigate('/progression')}
-                className="flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium"
-              >
-                Voir votre progression <ArrowRight size={16} />
-              </button>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="text-center">
+              <p className="text-xs text-slate-500">Progression</p>
+              <p className="text-xl font-bold text-slate-800 dark:text-white">{periodStats.day.progress}%</p>
             </div>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <div className="text-center">
-                <p className="text-xs text-slate-500">Progression</p>
-                <p className="text-xl font-bold text-slate-800 dark:text-white">{periodStats.day.progress}%</p>
-              </div>
-              <div className="text-center">
-                <p className="text-xs text-slate-500">Examens</p>
-                <p className="text-xl font-bold text-slate-800 dark:text-white">{periodStats.day.exams}</p>
-              </div>
-              <div className="text-center">
-                <p className="text-xs text-slate-500">Moyenne</p>
-                <p className={`text-xl font-bold ${periodStats.day.avg >= 50 ? 'text-green-600' : 'text-red-500'}`}>{periodStats.day.avg}%</p>
-              </div>
-              <div className="text-center">
-                <p className="text-xs text-slate-500">Cours lus</p>
-                <p className="text-xl font-bold text-slate-800 dark:text-white">{periodStats.day.lessons}</p>
-              </div>
-              <div className="text-center">
-                <p className="text-xs text-slate-500">QCMs cours</p>
-                <p className="text-xl font-bold text-slate-800 dark:text-white">{periodStats.day.qcmLessons}</p>
-              </div>
+            <div className="text-center">
+              <p className="text-xs text-slate-500">Examens</p>
+              <p className="text-xl font-bold text-slate-800 dark:text-white">{periodStats.day.exams}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-slate-500">Moyenne</p>
+              <p className={`text-xl font-bold ${periodStats.day.avg >= 50 ? 'text-green-600' : 'text-red-500'}`}>{periodStats.day.avg}%</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-slate-500">Cours lus</p>
+              <p className="text-xl font-bold text-slate-800 dark:text-white">{periodStats.day.lessons}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-slate-500">QCMs cours</p>
+              <p className="text-xl font-bold text-slate-800 dark:text-white">{periodStats.day.qcmLessons}</p>
             </div>
           </div>
+        </div>
 
         {/* ---------- To-Do List ---------- */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
@@ -600,7 +593,7 @@ function StudentProfile() {
           )}
         </div>
 
-                {/* ---------- Résumé d'étude (détaillé) avec "Voir plus" ---------- */}
+        {/* ---------- Résumé d'étude (détaillé) ---------- */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
           <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
             <TrendingUp size={20} className="text-green-600" /> Tâches à accomplir
@@ -728,7 +721,6 @@ function StudentProfile() {
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );

@@ -1,9 +1,9 @@
 // StudentProgress.js
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  BarChart2, BookOpen, CheckCircle, Clock, Calendar, Filter,
-  ArrowLeft, TrendingUp, Zap, Award, Users, FileText
+  BookOpen, CheckCircle, Clock, Filter,
+  ArrowLeft, TrendingUp, Zap, Award
 } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -14,6 +14,7 @@ function StudentProgress() {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user'));
 
+  // بيانات الإحصائيات الأساسية
   const [stats, setStats] = useState({
     progress: 0,
     completedExams: 0,
@@ -32,6 +33,7 @@ function StudentProgress() {
   const [allLessons, setAllLessons] = useState([]);
   const [allQuizzes, setAllQuizzes] = useState([]);
   const [extraLoading, setExtraLoading] = useState(true);
+  const extraFetched = useRef(false);
 
   // --- حساب الوحدات المكتملة والكلية باستخدام useMemo ---
   const moduleStats = useMemo(() => {
@@ -46,7 +48,7 @@ function StudentProgress() {
 
     allModules.forEach(mod => {
       const moduleQuizzes = allQuizzes.filter(q => q.moduleId?._id?.toString() === mod._id?.toString() && q.type === 'module');
-      if (moduleQuizzes.length === 0) return; // لا نحتسب الموديولات التي ليس لها QCMs
+      if (moduleQuizzes.length === 0) return;
       total++;
       const resolvedCount = moduleQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
       if (resolvedCount === moduleQuizzes.length) completed++;
@@ -98,11 +100,13 @@ function StudentProgress() {
     };
 
     fetchStats();
-  }, [user]);
+  }, [user, navigate]);
 
-  // --- تحميل البيانات الإضافية (موديولات، دروس، QCMs) ---
+  // --- تحميل البيانات الإضافية مرة واحدة فقط ---
   useEffect(() => {
-    if (!user || !user.year) return;
+    if (!user || !user.year || extraFetched.current) return;
+    extraFetched.current = true;
+
     const fetchExtraData = async () => {
       setExtraLoading(true);
       try {
@@ -132,8 +136,8 @@ function StudentProgress() {
     fetchExtraData();
   }, [user]);
 
-  // --- دالة مساعدة لاستخراج اسم الوحدة من كائن quiz ---
-  const getModuleNameFromQuiz = (quiz) => {
+  // --- دالة مساعدة لاستخراج اسم الوحدة ---
+  const getModuleNameFromQuiz = useCallback((quiz) => {
     if (!quiz) return 'Module inconnu';
     if (quiz.moduleId && typeof quiz.moduleId === 'object' && quiz.moduleId.title) {
       return quiz.moduleId.title;
@@ -153,11 +157,10 @@ function StudentProgress() {
       if (module) return module.title;
     }
     return 'Module inconnu';
-  };
+  }, [allLessons, allModules]);
 
-  // --- تحضير بيانات المنحنى ---
-  const prepareChartData = (readLessons, completedQuizzes, filter) => {
-    // تجميع البيانات يومياً
+  // --- تحضير بيانات المنحنى (مع useCallback) ---
+  const prepareChartData = useCallback((readLessons, completedQuizzes, filter) => {
     const dailyMap = {};
 
     readLessons.forEach(r => {
@@ -174,7 +177,6 @@ function StudentProgress() {
       dailyMap[key].quizzes++;
     });
 
-    // تحديد النطاق الزمني حسب الفلتر
     const now = new Date();
     let startDate, endDate = new Date();
 
@@ -212,7 +214,6 @@ function StudentProgress() {
         break;
     }
 
-    // توليد جميع الأيام بين startDate و endDate
     const dateRange = [];
     const current = new Date(startDate);
     while (current <= endDate) {
@@ -220,15 +221,12 @@ function StudentProgress() {
       current.setDate(current.getDate() + 1);
     }
 
-    // بناء النتيجة مع تعبئة الأيام الفارغة بقيمة 0
-    const result = dateRange.map(date => ({
+    return dateRange.map(date => ({
       date,
       lessons: dailyMap[date]?.lessons || 0,
       quizzes: dailyMap[date]?.quizzes || 0
     }));
-
-    return result;
-  };
+  }, []);
 
   // --- تحديث المنحنى عند تغيير الفلتر أو البيانات ---
   useEffect(() => {
@@ -238,7 +236,7 @@ function StudentProgress() {
     }
     const data = prepareChartData(stats.readLessons, stats.completedQuizzes, filterPeriod);
     setChartData(data);
-  }, [filterPeriod, stats.readLessons, stats.completedQuizzes]);
+  }, [filterPeriod, stats.readLessons, stats.completedQuizzes, prepareChartData]);
 
   const getPeriodLabel = () => {
     switch (filterPeriod) {
@@ -250,14 +248,13 @@ function StudentProgress() {
     }
   };
 
-  if (loading || extraLoading) return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-10 flex items-center justify-center">
-      <div className="text-center text-slate-500">Chargement de votre progression...</div>
-    </div>
-  );
-
-  // --- حساب نسبة التقدم الكلية (إذا أردت استخدامها) ---
-  const progress = stats.totalLessons > 0 ? Math.round((stats.lessonsRead / stats.totalLessons) * 100) : 0;
+  if (loading || extraLoading) {
+    return (
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-10 flex items-center justify-center">
+        <div className="text-center text-slate-500">Chargement de votre progression...</div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 md:p-8">
@@ -399,7 +396,6 @@ function StudentProgress() {
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {stats.readLessons?.length > 0 ? (
                 stats.readLessons.map((r, i) => {
-                  // استخراج اسم الوحدة
                   const lessonId = r.lessonId?._id || r.lessonId;
                   const lesson = allLessons.find(l => l._id === lessonId);
                   const moduleId = lesson?.moduleId?._id || lesson?.moduleId;
