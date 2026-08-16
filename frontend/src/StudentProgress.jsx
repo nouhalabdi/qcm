@@ -35,7 +35,7 @@ function StudentProgress() {
   const [extraLoading, setExtraLoading] = useState(true);
   const extraFetched = useRef(false);
 
-  // --- حساب متوسط النقاط (Score moyen) ---
+  // --- حساب متوسط النقاط ---
   const averageScore = useMemo(() => {
     if (stats.completedQuizzes.length === 0) return null;
     const total = stats.completedQuizzes.reduce((acc, q) => acc + (q.score || 0), 0);
@@ -80,7 +80,6 @@ function StudentProgress() {
         if (!res.ok) throw new Error('Erreur serveur');
         const data = await res.json();
 
-        // معالجة التواريخ
         const readLessons = (data.readLessons || []).map(r => ({
           ...r,
           readAt: r.readAt ? new Date(r.readAt) : null,
@@ -112,13 +111,45 @@ function StudentProgress() {
     fetchStats();
   }, [user, navigate]);
 
-  // --- تحميل البيانات الإضافية مرة واحدة فقط ---
+  // --- تحميل البيانات الإضافية مع cache ---
   useEffect(() => {
     if (!user || !user.year || extraFetched.current) return;
     extraFetched.current = true;
 
+    const CACHE_KEY = `progress_extra_${user.year}`;
+    const CACHE_EXPIRY = 5 * 60 * 1000;
+
+    const loadFromCache = () => {
+      try {
+        const cached = localStorage.getItem(CACHE_KEY);
+        if (cached) {
+          const { data, timestamp } = JSON.parse(cached);
+          if (Date.now() - timestamp < CACHE_EXPIRY) {
+            return data;
+          }
+        }
+      } catch (e) {}
+      return null;
+    };
+
+    const saveToCache = (data) => {
+      try {
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ data, timestamp: Date.now() }));
+      } catch (e) {}
+    };
+
     const fetchExtraData = async () => {
       setExtraLoading(true);
+
+      const cachedData = loadFromCache();
+      if (cachedData) {
+        setAllModules(cachedData.modules);
+        setAllLessons(cachedData.allLessons);
+        setAllQuizzes(cachedData.allQuizzes);
+        setExtraLoading(false);
+        return;
+      }
+
       try {
         const modulesRes = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/modules?year=${user.year}`);
         const modulesData = await modulesRes.json();
@@ -127,22 +158,40 @@ function StudentProgress() {
         const lessonsPromises = modulesData.map(mod =>
           fetch(`https://reussite-qcmss-1nc7.onrender.com/api/lessons?moduleId=${mod._id}`).then(r => r.json())
         );
-        const lessonsArrays = await Promise.all(lessonsPromises);
-        const allLessonsData = lessonsArrays.flat();
-        setAllLessons(allLessonsData);
-
         const quizzesPromises = modulesData.map(mod =>
           fetch(`https://reussite-qcmss-1nc7.onrender.com/api/quizzes?moduleId=${mod._id}`).then(r => r.json())
         );
-        const quizzesArrays = await Promise.all(quizzesPromises);
-        const allQuizzesData = quizzesArrays.flat();
+
+        const [lessonsResults, quizzesResults] = await Promise.allSettled([
+          Promise.all(lessonsPromises),
+          Promise.all(quizzesPromises)
+        ]);
+
+        let allLessonsData = [];
+        let allQuizzesData = [];
+
+        if (lessonsResults.status === 'fulfilled') {
+          allLessonsData = lessonsResults.value.flat();
+        }
+        if (quizzesResults.status === 'fulfilled') {
+          allQuizzesData = quizzesResults.value.flat();
+        }
+
+        setAllLessons(allLessonsData);
         setAllQuizzes(allQuizzesData);
+
+        saveToCache({
+          modules: modulesData,
+          allLessons: allLessonsData,
+          allQuizzes: allQuizzesData
+        });
       } catch (err) {
         console.error('Erreur chargement données extra:', err);
       } finally {
         setExtraLoading(false);
       }
     };
+
     fetchExtraData();
   }, [user]);
 
@@ -169,7 +218,7 @@ function StudentProgress() {
     return 'Module inconnu';
   }, [allLessons, allModules]);
 
-  // --- تحضير بيانات المنحنى (مع معالجة الأسبوع بشكل صحيح) ---
+  // --- تحضير بيانات المنحنى ---
   const prepareChartData = useCallback((readLessons, completedQuizzes, filter) => {
     const dailyMap = {};
 
@@ -216,7 +265,7 @@ function StudentProgress() {
         endDate.setHours(23, 59, 59, 999);
         break;
       }
-      default: { // 'all'
+      default: {
         const allDates = Object.keys(dailyMap).sort();
         if (allDates.length === 0) return [];
         startDate = new Date(allDates[0]);
@@ -258,14 +307,45 @@ function StudentProgress() {
     }
   };
 
-  if (loading || extraLoading) {
+  // ---------- Skeleton de chargement ----------
+  if (loading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-10 flex items-center justify-center">
-        <div className="text-center text-slate-500">Chargement de votre progression...</div>
+      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 md:p-8">
+        <div className="max-w-6xl mx-auto space-y-6 animate-pulse">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-10 h-10 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
+            <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-48"></div>
+          </div>
+          <div className="bg-white dark:bg-slate-800 p-4 rounded-xl">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-20"></div>
+              <div className="flex gap-2">
+                {[...Array(4)].map((_, i) => (
+                  <div key={i} className="h-8 bg-slate-200 dark:bg-slate-700 rounded-lg w-16"></div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="bg-white dark:bg-slate-800 p-4 rounded-xl">
+                <div className="flex items-center gap-3">
+                  <div className="w-5 h-5 bg-slate-200 dark:bg-slate-700 rounded"></div>
+                  <div><div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-16"></div><div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-12 mt-1"></div></div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="bg-white dark:bg-slate-800 p-6 rounded-xl">
+            <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-40 mb-4"></div>
+            <div className="h-64 bg-slate-200 dark:bg-slate-700 rounded"></div>
+          </div>
+        </div>
       </div>
     );
   }
 
+  // ---------- JSX ----------
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 md:p-8">
       <div className="max-w-6xl mx-auto">
@@ -338,7 +418,6 @@ function StudentProgress() {
               </div>
             </div>
           </div>
-          {/* ✅ استبدال Modules complétés بـ Score moyen */}
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
             <div className="flex items-center gap-3">
               <Award size={20} className="text-green-600" />
@@ -397,9 +476,8 @@ function StudentProgress() {
           </div>
         )}
 
-        {/* Détails : Cours et QCMs */}
+        {/* Détails */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Cours lus avec nom du module */}
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
             <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
               <BookOpen size={18} className="text-blue-600" /> Cours lus
@@ -432,7 +510,6 @@ function StudentProgress() {
             </div>
           </div>
 
-          {/* QCMs résolus */}
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
             <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
               <Zap size={18} className="text-yellow-600" /> QCMs résolus
@@ -460,7 +537,6 @@ function StudentProgress() {
           </div>
         </div>
 
-        {/* Bouton retour */}
         <div className="mt-8 text-center">
           <button
             onClick={() => navigate('/cours')}
