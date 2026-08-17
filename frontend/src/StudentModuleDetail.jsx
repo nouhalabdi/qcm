@@ -1,7 +1,7 @@
-// StudentModuleDetail.jsx - مع تحديث customFiles محلياً واستبدال النسخة القديمة
+// StudentModuleDetail.jsx - مع تحديث نوافذ QCMs
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, FileText, Video, BookOpen, Play, CheckCircle, X } from 'lucide-react';
+import { ArrowLeft, FileText, Video, BookOpen, Play, CheckCircle, X, Clock } from 'lucide-react';
 import PdfAnnotatorModal from './PdfAnnotatorModal';
 import VideoPlayerModal from './VideoPlayerModal';
 
@@ -24,7 +24,14 @@ function StudentModuleDetail() {
   const [selectedYear, setSelectedYear] = useState(null);
   const [showYearPicker, setShowYearPicker] = useState(false);
 
-  const [qcmModal, setQcmModal] = useState({ open: false, type: null });
+  // ✅ نوافذ جديدة لعرض قوائم QCMs
+  const [showLessonQCMs, setShowLessonQCMs] = useState(false);
+  const [lessonQCMs, setLessonQCMs] = useState([]);
+  const [lessonQCMsLoading, setLessonQCMsLoading] = useState(false);
+
+  const [showYearQCMs, setShowYearQCMs] = useState(false);
+  const [yearQCMsList, setYearQCMsList] = useState([]);
+
   const [pdfViewer, setPdfViewer] = useState(null);
   const [videoPlayer, setVideoPlayer] = useState(null);
 
@@ -35,7 +42,6 @@ function StudentModuleDetail() {
 
   const [iaCourseQuizModal, setIaCourseQuizModal] = useState({ open: false, quizzes: [], title: '' });
 
-  // ✅ دالة لضمان استخدام HTTPS للروابط
   const ensureHttps = (url) => {
     if (!url) return url;
     if (url.startsWith('http://')) {
@@ -107,11 +113,10 @@ function StudentModuleDetail() {
               .map(r => r.lessonId?._id?.toString() || r.lessonId?.toString())
               .filter(Boolean);
             setReadLessons(readLessonIds);
-            // الحفاظ على ملف واحد لكل (lessonId, year) في حالة وجود تكرار
             const uniqueFiles = {};
             (statsData.customFiles || []).forEach(f => {
               const key = `${f.originalLessonId?.toString()}-${f.year}`;
-              uniqueFiles[key] = f; // آخر ملف يبقى
+              uniqueFiles[key] = f;
             });
             setCustomFiles(Object.values(uniqueFiles));
           } else {
@@ -162,6 +167,42 @@ function StudentModuleDetail() {
     }
   };
 
+  // ---- Gestion des QCMs par cours (pour un lesson spécifique) ----
+  const openLessonQCMs = async (lessonId, lessonTitle) => {
+    setLessonQCMsLoading(true);
+    setShowLessonQCMs(true);
+    try {
+      const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/quizzes?lessonId=${lessonId}&type=lesson&isIA=false`);
+      const data = await res.json();
+      setLessonQCMs(data);
+    } catch (err) {
+      console.error(err);
+      alert("Erreur lors du chargement des QCMs.");
+    } finally {
+      setLessonQCMsLoading(false);
+    }
+  };
+
+  // ---- Gestion des QCMs par année (pour le module) ----
+  const openYearQCMs = () => {
+    // On regroupe les examens par année
+    const yearsMap = {};
+    exams.forEach(exam => {
+      if (!yearsMap[exam.year]) {
+        yearsMap[exam.year] = [];
+      }
+      yearsMap[exam.year].push(exam);
+    });
+    // On transforme en tableau pour l'affichage
+    const yearsList = Object.keys(yearsMap).map(year => ({
+      year,
+      exams: yearsMap[year]
+    }));
+    setYearQCMsList(yearsList);
+    setShowYearQCMs(true);
+  };
+
+  // ---- Fonctions existantes pour les catégories (cours, résumé, etc.) ----
   const getYearsForCategory = (category) => {
     const years = new Set();
     if (category === 'exams-year') {
@@ -197,7 +238,6 @@ function StudentModuleDetail() {
     if (!version) return { originalFiles: [], modifiedFiles: [], aiFiles: [], aiSummary: null, iaQuizzes: [] };
 
     const originalFiles = (version.pdf || []).map(f => ({ url: ensureHttps(f.url), name: f.name || 'Cours', isModified: false }));
-    // تصفية الملفات المعدلة للحصول على واحد فقط لكل (lesson, year)
     const modifiedFiles = (customFiles || [])
       .filter(f => f.originalLessonId?.toString() === lesson._id?.toString() && f.year === year)
       .map(f => ({ url: ensureHttps(f.fileUrl), name: 'Cours modifié', isModified: true }));
@@ -209,17 +249,13 @@ function StudentModuleDetail() {
     return { originalFiles, modifiedFiles, aiFiles, aiSummary, iaQuizzes: iaQuizzesForLesson };
   };
 
-  // تحديث customFiles محلياً واستبدال القديم بالجديد
   const handleModifiedSaved = (newUrl) => {
     const secureUrl = ensureHttps(newUrl);
     setCustomFiles(prev => {
-      // حذف الملفات القديمة لنفس الدرس والسنة
       const filtered = prev.filter(f =>
         !(f.originalLessonId?.toString() === editingLessonId?.toString() && f.year === editingYear)
       );
-      // إضافة الجديد
       const updated = [...filtered, { fileUrl: secureUrl, originalLessonId: editingLessonId, year: editingYear }];
-      // تحديث الخادم بالقائمة الجديدة
       fetch('https://reussite-qcmss-1nc7.onrender.com/api/users/custom-files', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -252,8 +288,9 @@ function StudentModuleDetail() {
   };
 
   const handleCategorySelect = (category) => {
+    // Nous avons supprimé l'ancienne logique des QCMs (qcms) car nous utilisons maintenant les boutons directs
     if (category === 'qcms') {
-      setQcmModal({ open: true, type: null });
+      // On pourrait ouvrir une fenêtre de choix, mais on va laisser les boutons spécifiques
       return;
     }
 
@@ -274,7 +311,6 @@ function StudentModuleDetail() {
     setShowYearPicker(false);
   };
 
-  // ✅ دالة مفتوحة PDF مع HTTPS
   const openPdfViewer = (url, title, canAnnotate, canDownload, originalLessonId = null, year = null) => {
     const secureUrl = ensureHttps(url);
     setEditingLessonId(originalLessonId);
@@ -339,7 +375,7 @@ function StudentModuleDetail() {
           </div>
         </div>
 
-        {/* 5 boutons */}
+        {/* 5 boutons (sans le bouton QCMs car nous l'avons remplacé par des boutons spécifiques) */}
         <h3 className="text-center text-lg sm:text-xl font-bold text-slate-900 dark:text-white mt-6 mb-4">LES CATÉGORIES :</h3>
         <div className="flex flex-wrap justify-center gap-1 sm:gap-2 px-4 pb-6">
           <button onClick={() => handleCategorySelect('cours')} className="flex-1 min-w-[60px] sm:min-w-[100px] flex flex-col items-center justify-center p-2 sm:p-4 bg-[#2EC4B6] text-white rounded-2xl shadow-sm hover:opacity-90 transition h-14 sm:h-20">
@@ -351,15 +387,22 @@ function StudentModuleDetail() {
           <button onClick={() => handleCategorySelect('td')} className="flex-1 min-w-[60px] sm:min-w-[100px] flex flex-col items-center justify-center p-2 sm:p-4 bg-[#1A3B66] text-white rounded-2xl shadow-sm hover:opacity-90 transition h-14 sm:h-20">
             <FileText size={16} className="mb-1 sm:mb-2" /> <span className="font-bold text-[10px] sm:text-xs text-center">TDs</span>
           </button>
-          <button onClick={() => handleCategorySelect('qcms')} className="flex-1 min-w-[60px] sm:min-w-[100px] flex flex-col items-center justify-center p-2 sm:p-4 bg-[#FBA94D] text-white rounded-2xl shadow-sm hover:opacity-90 transition h-14 sm:h-20">
-            <Play size={16} className="mb-1 sm:mb-2" /> <span className="font-bold text-[10px] sm:text-xs text-center">QCMS</span>
-          </button>
           <button onClick={() => handleCategorySelect('video')} className="flex-1 min-w-[60px] sm:min-w-[100px] flex flex-col items-center justify-center p-2 sm:p-4 bg-[#6C63FF] text-white rounded-2xl shadow-sm hover:opacity-90 transition h-14 sm:h-20">
             <Video size={16} className="mb-1 sm:mb-2" /> <span className="font-bold text-[10px] sm:text-xs text-center">VIDÉO</span>
           </button>
         </div>
 
-        {/* Modale choix année */}
+        {/* Nouveaux boutons pour les QCMs */}
+        <div className="flex flex-wrap justify-center gap-3 px-4 pb-6">
+          <button
+            onClick={openYearQCMs}
+            className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg shadow flex items-center gap-2 text-sm font-medium"
+          >
+            <Clock size={18} /> Examens du Module (par année)
+          </button>
+        </div>
+
+        {/* Modale choix année (pour cours, résumés, etc.) */}
         {showYearPicker && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6">
@@ -392,29 +435,90 @@ function StudentModuleDetail() {
           </div>
         )}
 
-        {/* Modale choix QCM (hors IA) */}
-        {qcmModal.open && (
+        {/* ✅ NOUVEAU : Modale pour afficher les QCMs par cours (avec titres) */}
+        {showLessonQCMs && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-lg w-full p-6 max-h-[80vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
-                <h4 className="text-lg font-bold text-slate-900 dark:text-white">Choisir le type de QCM</h4>
-                <button onClick={() => setQcmModal({ open: false, type: null })} className="text-slate-500 hover:text-red-500"><X size={20} /></button>
+                <h4 className="text-lg font-bold text-slate-900 dark:text-white">QCMs du cours</h4>
+                <button onClick={() => setShowLessonQCMs(false)} className="text-slate-500 hover:text-red-500"><X size={20} /></button>
               </div>
-              <div className="space-y-3">
-                <button onClick={() => { setQcmModal({ open: false, type: null }); handleCategorySelect('exams-year'); }} className="w-full p-4 border border-orange-200 dark:border-orange-900/30 rounded-lg hover:bg-orange-50 dark:hover:bg-orange-900/20 text-center">
-                  <p className="font-bold text-orange-600 dark:text-orange-400">Examen par année</p>
-                  <p className="text-xs text-slate-500">Examens généraux du module (hors IA)</p>
-                </button>
-                <button onClick={() => { setQcmModal({ open: false, type: null }); handleCategorySelect('exams-lesson'); }} className="w-full p-4 border border-green-200 dark:border-green-900/30 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 text-center">
-                  <p className="font-bold text-green-600 dark:text-green-400">Examen par cours</p>
-                  <p className="text-xs text-slate-500">QCMs propres à chaque leçon (hors IA)</p>
-                </button>
-              </div>
+              {lessonQCMsLoading ? (
+                <p className="text-center text-slate-500">Chargement...</p>
+              ) : lessonQCMs.length === 0 ? (
+                <p className="text-center text-slate-500">Aucun QCM disponible pour ce cours.</p>
+              ) : (
+                <div className="space-y-3">
+                  {lessonQCMs.map(qcm => (
+                    <div key={qcm._id} className="flex items-center justify-between p-3 border border-blue-200 dark:border-blue-900/30 rounded-lg bg-blue-50 dark:bg-blue-900/10">
+                      <div>
+                        <p className="font-medium text-slate-800 dark:text-white">
+                          {qcm.title || 'QCM Normal'}
+                        </p>
+                        <p className="text-xs text-slate-500">{qcm.questions?.length || 0} questions · {qcm.durationMinutes} min</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setShowLessonQCMs(false);
+                          navigate(`/quiz/lesson/${qcm._id}?type=lesson&title=${encodeURIComponent(qcm.title || 'QCM')}`);
+                        }}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg shadow transition"
+                      >
+                        Démarrer
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        {/* Modal QCM IA du cours */}
+        {/* ✅ NOUVEAU : Modale pour afficher les examens par année (avec titres entre parenthèses) */}
+        {showYearQCMs && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-lg w-full p-6 max-h-[80vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h4 className="text-lg font-bold text-slate-900 dark:text-white">Examens du Module</h4>
+                <button onClick={() => setShowYearQCMs(false)} className="text-slate-500 hover:text-red-500"><X size={20} /></button>
+              </div>
+              {yearQCMsList.length === 0 ? (
+                <p className="text-center text-slate-500">Aucun examen disponible pour ce module.</p>
+              ) : (
+                <div className="space-y-3">
+                  {yearQCMsList.map(({ year, exams }) => (
+                    <div key={year} className="border border-orange-200 dark:border-orange-900/30 rounded-lg p-3 bg-orange-50 dark:bg-orange-900/10">
+                      <p className="font-bold text-slate-800 dark:text-white">
+                        {year}
+                        {exams.some(e => e.title) && ` (${exams.find(e => e.title)?.title || ''})`}
+                      </p>
+                      <div className="mt-2 space-y-2">
+                        {exams.map(exam => (
+                          <div key={exam._id} className="flex items-center justify-between pl-2">
+                            <span className="text-sm text-slate-600 dark:text-slate-300">
+                              {exam.title || 'Examen'}
+                            </span>
+                            <button
+                              onClick={() => {
+                                setShowYearQCMs(false);
+                                navigate(`/quiz/exam/${exam._id}?type=module&title=${encodeURIComponent(exam.title || exam.year)}`);
+                              }}
+                              className="px-3 py-1 bg-orange-500 hover:bg-orange-600 text-white text-xs rounded-lg shadow transition"
+                            >
+                              Démarrer
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Modal QCM IA du cours (inchangé) */}
         {iaCourseQuizModal.open && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-lg w-full p-6">
@@ -449,7 +553,7 @@ function StudentModuleDetail() {
           </div>
         )}
 
-        {/* Affichage du contenu selon la catégorie */}
+        {/* Affichage du contenu selon la catégorie (inchangé) */}
         {activeCategory && (
           <div className="px-4 pb-8 space-y-4 border-t border-slate-200 dark:border-slate-700 pt-6">
             <div className="flex flex-wrap items-center justify-between mb-2 gap-2">
@@ -497,7 +601,6 @@ function StudentModuleDetail() {
                         </div>
 
                         <div className="mt-3 flex flex-wrap items-center gap-2">
-                          {/* الملفات الأصلية */}
                           {originalFiles.map((file, idx) => (
                             <button
                               key={idx}
@@ -507,8 +610,6 @@ function StudentModuleDetail() {
                               <FileText size={14} /> {file.name}
                             </button>
                           ))}
-
-                          {/* الملفات المعدلة (نسخة واحدة فقط) */}
                           {modifiedFiles.map((file, idx) => (
                             <button
                               key={`mod-${idx}`}
@@ -518,8 +619,6 @@ function StudentModuleDetail() {
                               <FileText size={14} /> {file.name}
                             </button>
                           ))}
-
-                          {/* Cours IA */}
                           {aiFiles.map((file, idx) => (
                             <button
                               key={`ai-${idx}`}
@@ -529,8 +628,6 @@ function StudentModuleDetail() {
                               <FileText size={14} /> {file.name}
                             </button>
                           ))}
-
-                          {/* Résumé IA */}
                           {aiSummary && (
                             <button
                               onClick={() => openPdfViewer(aiSummary.url, aiSummary.name || 'Résumé IA', false, false, lesson._id, selectedYear)}
@@ -539,8 +636,6 @@ function StudentModuleDetail() {
                               <BookOpen size={14} /> Résumé IA
                             </button>
                           )}
-
-                          {/* QCM IA — va directement à la liste des QCM IA de ce cours */}
                           <button
                             onClick={() => openIaCourseQuizzes(lesson._id)}
                             className="flex items-center gap-1 text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded-lg hover:bg-green-200 transition"
