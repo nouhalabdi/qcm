@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { Clock, CheckCircle, XCircle, ArrowLeft, ArrowRight, Save, X, FileText, Trophy, Heart, MessageCircle } from 'lucide-react';
-import ChatWindow from './ChatWindow'; 
+import { Clock, CheckCircle, XCircle, ArrowLeft, ArrowRight, Save, X, FileText, Trophy, Heart, MessageCircle, Maximize2, Minimize2 } from 'lucide-react';
+import ChatWindow from './ChatWindow';
 
 function StudentQuizView() {
   const { quizId } = useParams();
@@ -41,6 +41,9 @@ function StudentQuizView() {
   const [isRankingModalOpen, setIsRankingModalOpen] = useState(false);
   const [isFavorite, setIsFavorite] = useState(false);
   const [togglingFavorite, setTogglingFavorite] = useState(false);
+
+  // États pour l'agrandissement des images
+  const [zoomedImage, setZoomedImage] = useState(null); // url de l'image agrandie
 
   // Chargement du quiz
   useEffect(() => {
@@ -114,23 +117,22 @@ function StudentQuizView() {
     return () => clearInterval(timer);
   }, [timeLeft, isFinished, isReviewMode]);
 
-  // ✅ Fonction handleFinish avec timeTaken
   const handleFinish = async () => {
     if (isReviewMode) return;
 
     let correctCount = 0;
     quiz.questions.forEach((q, idx) => {
-      if (selectedAnswers[idx] === q.correctAnswer) correctCount++;
+      // Ne compter comme correcte que si la réponse sélectionnée correspond exactement à correctAnswer
+      // Si correctAnswer est vide, aucun choix n'est correct
+      if (q.correctAnswer && selectedAnswers[idx] === q.correctAnswer) correctCount++;
     });
     setScore(correctCount);
     setIsFinished(true);
 
-    // ✅ حساب الوقت المستغرق
     let timeSpent = 0;
     if (startTime) {
       timeSpent = Math.floor((Date.now() - startTime) / 1000);
     }
-    console.log('⏱️ Temps passé:', timeSpent, 'secondes');
 
     setIsSaving(true);
     try {
@@ -142,7 +144,7 @@ function StudentQuizView() {
           quizId,
           type: quiz.type === 'simulation' ? 'module' : quiz.type,
           score: Math.round((correctCount / quiz.questions.length) * 100),
-          timeTaken: timeSpent // ✅ تأكد من إرسال هذا الحقل
+          timeTaken: timeSpent
         })
       });
       const data = await res.json();
@@ -183,7 +185,8 @@ function StudentQuizView() {
     const effectiveMode = (quiz.type !== 'lesson' && isPracticeMode) ? 'immediate' : quiz.correctionMode;
     if (effectiveMode === 'immediate' && selectedAnswers[currentQuestionIndex] !== undefined) {
       if (!answeredQuestions.has(currentQuestionIndex)) {
-        const isCorrect = selectedAnswers[currentQuestionIndex] === quiz.questions[currentQuestionIndex].correctAnswer;
+        const q = quiz.questions[currentQuestionIndex];
+        const isCorrect = q.correctAnswer && selectedAnswers[currentQuestionIndex] === q.correctAnswer;
         if (isCorrect) setScore(prev => prev + 1);
         setAnsweredQuestions(prev => new Set(prev.add(currentQuestionIndex)));
       }
@@ -296,6 +299,32 @@ function StudentQuizView() {
 
   const effectiveCorrectionMode = (quiz.type !== 'lesson' && isPracticeMode) ? 'immediate' : quiz.correctionMode;
 
+  // Composant d'affichage des images avec zoom
+  const ImageGallery = ({ images, alt }) => {
+    if (!images || images.length === 0) return null;
+    return (
+      <div className="flex flex-wrap gap-2 mt-3">
+        {images.map((url, idx) => (
+          <div key={idx} className="relative group">
+            <img
+              src={url}
+              alt={`${alt} ${idx+1}`}
+              className="max-w-[200px] max-h-[150px] object-contain rounded border border-slate-200 dark:border-slate-700 cursor-pointer hover:shadow-lg transition"
+              onClick={() => setZoomedImage(url)}
+            />
+            <button
+              onClick={() => setZoomedImage(url)}
+              className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition"
+              title="Agrandir"
+            >
+              <Maximize2 size={14} />
+            </button>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-3 sm:p-6 flex items-center justify-center">
       <div className="w-full max-w-4xl bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-4 sm:p-6 border border-slate-200 dark:border-slate-700 relative">
@@ -306,12 +335,14 @@ function StudentQuizView() {
             <h2 className="text-xl font-bold text-slate-800 dark:text-white">
               {isCorrectionOnly ? 'Correction du QCM' : quiz.type === 'lesson' ? 'QCM par cours' : quiz.type === 'simulation' ? 'Simulation' : 'Examen par année'}
             </h2>
-          {!quiz.isIA && <p className="text-sm text-slate-500 dark:text-slate-400">{quiz.year}</p>}
+            {/* ✅ Affichage du titre optionnel entre parenthèses */}
+            <p className="text-sm text-slate-500 dark:text-slate-400">
+              {quiz.year}{quiz.title ? ` (${quiz.title})` : ''}
+            </p>
             {isReviewMode && !isCorrectionOnly && <span className="text-xs text-blue-600 dark:text-blue-400 mt-1 block">Mode révision</span>}
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
-            {/* Mode Entraînement / Examen (uniquement pour les examens) */}
             {quiz.type !== 'lesson' && !isFinished && !isReviewMode && (
               <button
                 onClick={() => setIsPracticeMode(!isPracticeMode)}
@@ -360,7 +391,14 @@ function StudentQuizView() {
               <h3 className="text-lg font-medium text-slate-800 dark:text-white mb-4">
                 {quiz.questions[currentQuestionIndex].questionText}
               </h3>
-              <div className="space-y-3">
+
+              {/* ✅ Affichage des images du sujet */}
+              <ImageGallery
+                images={quiz.questions[currentQuestionIndex].questionImages}
+                alt="Image de la question"
+              />
+
+              <div className="space-y-3 mt-4">
                 {quiz.questions[currentQuestionIndex].options.map((opt, idx) => {
                   let btnClass = "w-full text-left p-3 border rounded-lg bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 transition";
                   const isSelected = selectedAnswers[currentQuestionIndex] === opt;
@@ -396,16 +434,14 @@ function StudentQuizView() {
 
               {showExplanation && (
                 <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
-                  <p className="text-sm text-slate-700 dark:text-slate-300">
+                  <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line">
                     <span className="font-bold text-blue-600">Explication :</span> {quiz.questions[currentQuestionIndex].explanation || 'Aucune explication fournie.'}
-                    {(quiz.questions[currentQuestionIndex].explanationImages || []).length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {quiz.questions[currentQuestionIndex].explanationImages.map((url, i) => (
-                          <img key={i} src={url} alt="explication" className="w-24 h-24 object-cover rounded border border-slate-200 dark:border-slate-600" />
-                        ))}
-                      </div>
-                    )}
                   </p>
+                  {/* ✅ Images d'explication avec zoom */}
+                  <ImageGallery
+                    images={quiz.questions[currentQuestionIndex].explanationImages}
+                    alt="Image d'explication"
+                  />
                 </div>
               )}
 
@@ -494,7 +530,13 @@ function StudentQuizView() {
               <h3 className="font-bold text-slate-800 dark:text-white mb-4">Détail des corrections :</h3>
               {quiz.questions.map((q, idx) => {
                 const studentAnswer = selectedAnswers[idx];
-                const wasCorrect = studentAnswer === q.correctAnswer;
+                let wasCorrect = false;
+                if (q.correctAnswer) {
+                  wasCorrect = studentAnswer === q.correctAnswer;
+                } else {
+                  // Si aucune réponse correcte, on considère que c'est faux
+                  wasCorrect = false;
+                }
                 return (
                   <div key={idx} className="p-3 border rounded-lg bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700">
                     <p className="text-sm font-medium text-slate-800 dark:text-white">{idx + 1}. {q.questionText}</p>
@@ -503,14 +545,34 @@ function StudentQuizView() {
                         {wasCorrect ? '✅' : '❌'} Votre réponse : {studentAnswer}
                       </p>
                     )}
-                    {(studentAnswer === undefined || !wasCorrect) && (
+                    {q.correctAnswer && (studentAnswer === undefined || !wasCorrect) && (
                       <p className="text-sm text-green-600 dark:text-green-400 mt-1">✅ Réponse correcte : {q.correctAnswer}</p>
                     )}
-                    {quiz.type === 'simulation' && q.explanation && <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">{q.explanation}</p>}
-                    {quiz.type === 'simulation' && (q.explanationImages || []).length > 0 && (
+                    {!q.correctAnswer && studentAnswer !== undefined && (
+                      <p className="text-sm text-orange-500 dark:text-orange-400 mt-1">⚠️ Aucune réponse correcte définie.</p>
+                    )}
+                    {quiz.type === 'simulation' && q.explanation && (
+                      <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 whitespace-pre-line">{q.explanation}</p>
+                    )}
+                    {/* ✅ Images d'explication dans la correction */}
+                    {(q.explanationImages || []).length > 0 && (
                       <div className="flex flex-wrap gap-2 mt-2">
                         {q.explanationImages.map((url, i) => (
-                          <img key={i} src={url} alt="explication" className="w-20 h-20 object-cover rounded border border-slate-200 dark:border-slate-600" />
+                          <div key={i} className="relative group">
+                            <img
+                              src={url}
+                              alt={`explication ${i+1}`}
+                              className="max-w-[150px] max-h-[120px] object-contain rounded border border-slate-200 dark:border-slate-600 cursor-pointer hover:shadow-lg transition"
+                              onClick={() => setZoomedImage(url)}
+                            />
+                            <button
+                              onClick={() => setZoomedImage(url)}
+                              className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition"
+                              title="Agrandir"
+                            >
+                              <Maximize2 size={12} />
+                            </button>
+                          </div>
                         ))}
                       </div>
                     )}
@@ -623,6 +685,28 @@ function StudentQuizView() {
             onClose={() => setShowChat(false)}
             onRead={() => {}}
           />
+        )}
+
+        {/* ✅ Modal d'agrandissement d'image */}
+        {zoomedImage && (
+          <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={() => setZoomedImage(null)}>
+            <div className="relative max-w-4xl max-h-[90vh] flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
+              <img src={zoomedImage} alt="Agrandissement" className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" />
+              <button
+                onClick={() => setZoomedImage(null)}
+                className="absolute top-4 right-4 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 transition"
+                title="Fermer"
+              >
+                <X size={24} />
+              </button>
+              <button
+                onClick={() => setZoomedImage(null)}
+                className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition text-sm"
+              >
+                Fermer
+              </button>
+            </div>
+          </div>
         )}
 
       </div>
