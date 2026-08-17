@@ -171,7 +171,7 @@ const emptyQuestion = () => ({
   correctAnswer: '',
   explanation: '',
   explanationImages: [],
-  questionImages: []   // ✅ nouveau champ pour les images du sujet
+  questionImages: []
 });
 
 const QuestionsBuilder = ({ questions, onChange, uploadFile }) => {
@@ -209,7 +209,6 @@ const QuestionsBuilder = ({ questions, onChange, uploadFile }) => {
   const addQuestion = () => onChange([...questions, emptyQuestion()]);
   const removeQuestion = (qIndex) => onChange(questions.filter((_, i) => i !== qIndex));
 
-  // Ajout des images pour le sujet (question)
   const addQuestionImages = async (qIndex, files) => {
     const urls = [];
     for (const file of files) {
@@ -227,7 +226,6 @@ const QuestionsBuilder = ({ questions, onChange, uploadFile }) => {
     onChange(updated);
   };
 
-  // Ajout des images pour l'explication
   const addExplanationImages = async (qIndex, files) => {
     const urls = [];
     for (const file of files) {
@@ -267,7 +265,6 @@ const QuestionsBuilder = ({ questions, onChange, uploadFile }) => {
             onChange={(e) => updateQuestion(qIndex, 'questionText', e.target.value)}
           />
 
-          {/* ✅ Images du sujet (question) */}
           <div className="mb-3">
             <label className="flex items-center gap-1 text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
               <ImagePlus size={14} /> Images pour la question
@@ -369,7 +366,7 @@ const QuestionsBuilder = ({ questions, onChange, uploadFile }) => {
   );
 };
 
-// ---------- JsonImportBox (accepte correctAnswer vide) ----------
+// ---------- JsonImportBox ----------
 const JsonImportBox = ({ onImport }) => {
   const [showBox, setShowBox] = useState(false);
   const [jsonText, setJsonText] = useState('');
@@ -391,23 +388,21 @@ const JsonImportBox = ({ onImport }) => {
       for (const yearBlock of parsed) {
         if (!Array.isArray(yearBlock.questions)) continue;
         for (const q of yearBlock.questions) {
-          // correctAnswer peut être vide ou absent → on accepte ''
           let correct = '';
           if (q.correctAnswers && Array.isArray(q.correctAnswers) && q.correctAnswers.length > 0 && q.correctAnswers[0] !== '') {
             correct = q.correctAnswers[0];
           } else if (q.correctAnswer && q.correctAnswer !== '') {
             correct = q.correctAnswer;
           }
-          // Si correct est vide, on garde '' (pas d'erreur)
           if (q.question && Array.isArray(q.options)) {
             const images = Array.isArray(q.photo) ? q.photo : (q.photo ? [q.photo] : []);
             allQuestions.push({
               questionText: q.question,
               options: [...q.options],
-              correctAnswer: correct,   // peut être vide
+              correctAnswer: correct,
               explanation: q.solutionText || '',
               explanationImages: images,
-              questionImages: []        // par défaut, l'import JSON n'a pas d'images de sujet
+              questionImages: []
             });
           }
         }
@@ -470,12 +465,12 @@ const JsonImportBox = ({ onImport }) => {
   );
 };
 
-// ---------- QuizModal (avec titre optionnel) ----------
+// ---------- QuizModal (avec modifications pour enlever l'année pour lesson) ----------
 const blankQuiz = (type) => ({
   _id: null,
   type,
-  title: '',           // ✅ titre optionnel
-  year: ALL_YEARS[0],
+  title: '',
+  year: type === 'lesson' ? '' : ALL_YEARS[0], // Pour lesson, on laisse vide
   durationMinutes: 20,
   authorName: '',
   correctionMode: type === 'lesson' ? 'immediate' : 'deferred',
@@ -532,8 +527,10 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
     if (type === 'lesson') {
       fresh.lessonId = targetId;
       fresh.moduleId = moduleIdProp;
+      fresh.year = ''; // pas de year pour lesson
     } else if (type === 'module') {
       fresh.moduleId = targetId;
+      fresh.year = ALL_YEARS[0];
     }
     setEditingQuiz(fresh);
     setView('builder');
@@ -550,8 +547,6 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
       alert("Veuillez indiquer l'auteur.");
       return;
     }
-    // ❌ On ne vérifie plus la présence de correctAnswer → on autorise les questions sans réponse
-    // On ne fait que vérifier que chaque question a au moins une option (ce qui est déjà le cas)
     try {
       const payload = { ...editingQuiz };
       delete payload._id;
@@ -613,9 +608,14 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
                     {quiz.isIA ? (
                       <span className="text-xs bg-purple-200 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 px-1.5 py-0.5 rounded mr-1">🤖 QCM IA</span>
                     ) : (
-                      // ✅ Afficher le titre entre parenthèses s'il existe
-                      `${quiz.year}${quiz.title ? ` (${quiz.title})` : ''} — `
+                      // Affichage : pour lesson, on met le titre ; pour module, on met année + titre entre parenthèses
+                      type === 'lesson' ? (
+                        `${quiz.title || 'QCM Normal'}`
+                      ) : (
+                        `${quiz.year}${quiz.title ? ` (${quiz.title})` : ''}`
+                      )
                     )}
+                    {type === 'lesson' && !quiz.isIA && ' — '}
                     {quiz.questions.length} question(s)
                   </p>
                   <p className="text-xs text-slate-500">{quiz.durationMinutes} min · Auteur : {quiz.authorName || 'Inconnu'}</p>
@@ -639,24 +639,25 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-              {/* ✅ Titre optionnel */}
               <div className="col-span-1">
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Titre (optionnel)</label>
                 <input type="text" placeholder="Ex: Révision anatomie" className={`w-full ${INPUT_CLASS}`} value={editingQuiz.title || ''} onChange={(e) => setEditingQuiz({ ...editingQuiz, title: e.target.value })} />
               </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
-                  Année {type === 'lesson' && editingQuiz.isIA && <span className="text-slate-400">(non applicable — QCM IA)</span>}
-                </label>
-                <select
-                  className={`w-full ${INPUT_CLASS} ${type === 'lesson' && editingQuiz.isIA ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  value={editingQuiz.year}
-                  onChange={(e) => setEditingQuiz({ ...editingQuiz, year: e.target.value })}
-                  disabled={type === 'lesson' && editingQuiz.isIA}
-                >
-                  {ALL_YEARS.map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
-              </div>
+
+              {/* ✅ Pour lesson, on cache complètement le champ année */}
+              {type !== 'lesson' && (
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Année</label>
+                  <select
+                    className={`w-full ${INPUT_CLASS}`}
+                    value={editingQuiz.year}
+                    onChange={(e) => setEditingQuiz({ ...editingQuiz, year: e.target.value })}
+                  >
+                    {ALL_YEARS.map(y => <option key={y} value={y}>{y}</option>)}
+                  </select>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Durée (min)</label>
                 <input type="number" min="1" className={`w-full ${INPUT_CLASS}`} value={editingQuiz.durationMinutes} onChange={(e) => setEditingQuiz({ ...editingQuiz, durationMinutes: parseInt(e.target.value) || 0 })} />
@@ -667,16 +668,24 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
               </div>
             </div>
 
-            {/* QCM IA : uniquement pour les QCM "par cours" (type === 'lesson'). Retiré des examens "par année". */}
+            {/* ✅ Pour lesson : on ajoute deux boutons "QCM Normal" et "QCM IA" */}
             {type === 'lesson' && (
-              <div className="flex items-center gap-2 mt-2">
-                <label className="text-sm font-medium text-slate-600 dark:text-slate-300">🤖 QCM IA</label>
-                <input
-                  type="checkbox"
-                  checked={editingQuiz.isIA || false}
-                  onChange={(e) => setEditingQuiz({ ...editingQuiz, isIA: e.target.checked })}
-                  className="w-4 h-4"
-                />
+              <div className="flex flex-wrap items-center gap-4 border-t border-gray-200 dark:border-slate-700 pt-4 mt-2">
+                <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Type :</span>
+                <button
+                  type="button"
+                  onClick={() => setEditingQuiz({ ...editingQuiz, isIA: false })}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition ${!editingQuiz.isIA ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}
+                >
+                  QCM Normal
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingQuiz({ ...editingQuiz, isIA: true })}
+                  className={`px-4 py-2 rounded-lg text-sm font-medium transition ${editingQuiz.isIA ? 'bg-purple-600 text-white' : 'bg-gray-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}
+                >
+                  🤖 QCM IA
+                </button>
               </div>
             )}
 
