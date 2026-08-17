@@ -1,4 +1,4 @@
-// StudentModuleDetail.jsx - مع تحديث نوافذ QCMs
+// StudentModuleDetail.jsx - مع إعادة زر QCMS وتعديل القوائم
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, FileText, Video, BookOpen, Play, CheckCircle, X, Clock } from 'lucide-react';
@@ -24,7 +24,8 @@ function StudentModuleDetail() {
   const [selectedYear, setSelectedYear] = useState(null);
   const [showYearPicker, setShowYearPicker] = useState(false);
 
-  // ✅ نوافذ جديدة لعرض قوائم QCMs
+  // ✅ حالات لإدارة نوافذ QCMs
+  const [showQCMTypeModal, setShowQCMTypeModal] = useState(false);
   const [showLessonQCMs, setShowLessonQCMs] = useState(false);
   const [lessonQCMs, setLessonQCMs] = useState([]);
   const [lessonQCMsLoading, setLessonQCMsLoading] = useState(false);
@@ -167,12 +168,37 @@ function StudentModuleDetail() {
     }
   };
 
-  // ---- Gestion des QCMs par cours (pour un lesson spécifique) ----
-  const openLessonQCMs = async (lessonId, lessonTitle) => {
+  // ---- Fonctions pour les QCMs ----
+  const openQCMTypeModal = () => {
+    setShowQCMTypeModal(true);
+  };
+
+  // ---- QCM par année : afficher les années avec titres ----
+  const handleYearQCMs = () => {
+    setShowQCMTypeModal(false);
+    const yearsMap = {};
+    exams.forEach(exam => {
+      if (!yearsMap[exam.year]) {
+        yearsMap[exam.year] = [];
+      }
+      yearsMap[exam.year].push(exam);
+    });
+    const yearsList = Object.keys(yearsMap).map(year => ({
+      year,
+      exams: yearsMap[year]
+    }));
+    setYearQCMsList(yearsList);
+    setShowYearQCMs(true);
+  };
+
+  // ---- QCM par cours : afficher les titres des QCMs (sans années) ----
+  const handleLessonQCMs = async () => {
+    setShowQCMTypeModal(false);
     setLessonQCMsLoading(true);
     setShowLessonQCMs(true);
     try {
-      const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/quizzes?lessonId=${lessonId}&type=lesson&isIA=false`);
+      // Récupérer tous les QCMs de type "lesson" pour ce module
+      const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/quizzes?moduleId=${moduleId}&type=lesson&isIA=false`);
       const data = await res.json();
       setLessonQCMs(data);
     } catch (err) {
@@ -181,25 +207,6 @@ function StudentModuleDetail() {
     } finally {
       setLessonQCMsLoading(false);
     }
-  };
-
-  // ---- Gestion des QCMs par année (pour le module) ----
-  const openYearQCMs = () => {
-    // On regroupe les examens par année
-    const yearsMap = {};
-    exams.forEach(exam => {
-      if (!yearsMap[exam.year]) {
-        yearsMap[exam.year] = [];
-      }
-      yearsMap[exam.year].push(exam);
-    });
-    // On transforme en tableau pour l'affichage
-    const yearsList = Object.keys(yearsMap).map(year => ({
-      year,
-      exams: yearsMap[year]
-    }));
-    setYearQCMsList(yearsList);
-    setShowYearQCMs(true);
   };
 
   // ---- Fonctions existantes pour les catégories (cours, résumé, etc.) ----
@@ -288,9 +295,8 @@ function StudentModuleDetail() {
   };
 
   const handleCategorySelect = (category) => {
-    // Nous avons supprimé l'ancienne logique des QCMs (qcms) car nous utilisons maintenant les boutons directs
     if (category === 'qcms') {
-      // On pourrait ouvrir une fenêtre de choix, mais on va laisser les boutons spécifiques
+      openQCMTypeModal();
       return;
     }
 
@@ -375,7 +381,7 @@ function StudentModuleDetail() {
           </div>
         </div>
 
-        {/* 5 boutons (sans le bouton QCMs car nous l'avons remplacé par des boutons spécifiques) */}
+        {/* 5 boutons (avec le bouton QCMs restauré) */}
         <h3 className="text-center text-lg sm:text-xl font-bold text-slate-900 dark:text-white mt-6 mb-4">LES CATÉGORIES :</h3>
         <div className="flex flex-wrap justify-center gap-1 sm:gap-2 px-4 pb-6">
           <button onClick={() => handleCategorySelect('cours')} className="flex-1 min-w-[60px] sm:min-w-[100px] flex flex-col items-center justify-center p-2 sm:p-4 bg-[#2EC4B6] text-white rounded-2xl shadow-sm hover:opacity-90 transition h-14 sm:h-20">
@@ -387,99 +393,42 @@ function StudentModuleDetail() {
           <button onClick={() => handleCategorySelect('td')} className="flex-1 min-w-[60px] sm:min-w-[100px] flex flex-col items-center justify-center p-2 sm:p-4 bg-[#1A3B66] text-white rounded-2xl shadow-sm hover:opacity-90 transition h-14 sm:h-20">
             <FileText size={16} className="mb-1 sm:mb-2" /> <span className="font-bold text-[10px] sm:text-xs text-center">TDs</span>
           </button>
+          <button onClick={() => handleCategorySelect('qcms')} className="flex-1 min-w-[60px] sm:min-w-[100px] flex flex-col items-center justify-center p-2 sm:p-4 bg-[#FBA94D] text-white rounded-2xl shadow-sm hover:opacity-90 transition h-14 sm:h-20">
+            <Play size={16} className="mb-1 sm:mb-2" /> <span className="font-bold text-[10px] sm:text-xs text-center">QCMS</span>
+          </button>
           <button onClick={() => handleCategorySelect('video')} className="flex-1 min-w-[60px] sm:min-w-[100px] flex flex-col items-center justify-center p-2 sm:p-4 bg-[#6C63FF] text-white rounded-2xl shadow-sm hover:opacity-90 transition h-14 sm:h-20">
             <Video size={16} className="mb-1 sm:mb-2" /> <span className="font-bold text-[10px] sm:text-xs text-center">VIDÉO</span>
           </button>
         </div>
 
-        {/* Nouveaux boutons pour les QCMs */}
-        <div className="flex flex-wrap justify-center gap-3 px-4 pb-6">
-          <button
-            onClick={openYearQCMs}
-            className="px-6 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-lg shadow flex items-center gap-2 text-sm font-medium"
-          >
-            <Clock size={18} /> Examens du Module (par année)
-          </button>
-        </div>
-
-        {/* Modale choix année (pour cours, résumés, etc.) */}
-        {showYearPicker && (
+        {/* ✅ Modale de choix entre QCM par année et QCM par cours */}
+        {showQCMTypeModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6">
               <div className="flex justify-between items-center mb-4">
-                <h4 className="text-lg font-bold text-slate-900 dark:text-white">Choisir une année</h4>
-                <button onClick={() => setShowYearPicker(false)} className="text-slate-500 hover:text-red-500"><X size={20} /></button>
+                <h4 className="text-lg font-bold text-slate-900 dark:text-white">Choisir le type de QCM</h4>
+                <button onClick={() => setShowQCMTypeModal(false)} className="text-slate-500 hover:text-red-500"><X size={20} /></button>
               </div>
-              <div className="space-y-3 max-h-60 overflow-y-auto">
-                {(() => {
-                  const yearsList = getYearsForCategory(activeCategory);
-                  return yearsList.length > 0 ? yearsList.map(year => (
-                    <button
-                      key={year}
-                      onClick={() => {
-                        if (activeCategory === 'exams-year' || activeCategory === 'exams-lesson') {
-                          handleNavigateToQuiz(year, activeCategory);
-                          setShowYearPicker(false);
-                        } else {
-                          handleYearSelect(year);
-                        }
-                      }}
-                      className="w-full text-left p-3 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-blue-500 transition bg-slate-50 dark:bg-slate-900"
-                    >
-                      <p className="font-medium text-slate-800 dark:text-white">{year}</p>
-                    </button>
-                  )) : <p className="text-center text-slate-500">Aucune année disponible</p>;
-                })()}
+              <div className="space-y-3">
+                <button onClick={handleYearQCMs} className="w-full p-4 border border-orange-200 dark:border-orange-900/30 rounded-lg hover:bg-orange-50 dark:hover:bg-orange-900/20 text-center">
+                  <p className="font-bold text-orange-600 dark:text-orange-400">QCM par année</p>
+                  <p className="text-xs text-slate-500">Examens généraux du module</p>
+                </button>
+                <button onClick={handleLessonQCMs} className="w-full p-4 border border-green-200 dark:border-green-900/30 rounded-lg hover:bg-green-50 dark:hover:bg-green-900/20 text-center">
+                  <p className="font-bold text-green-600 dark:text-green-400">QCM par cours</p>
+                  <p className="text-xs text-slate-500">QCMs propres à chaque leçon</p>
+                </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* ✅ NOUVEAU : Modale pour afficher les QCMs par cours (avec titres) */}
-        {showLessonQCMs && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-lg w-full p-6 max-h-[80vh] overflow-y-auto">
-              <div className="flex justify-between items-center mb-4">
-                <h4 className="text-lg font-bold text-slate-900 dark:text-white">QCMs du cours</h4>
-                <button onClick={() => setShowLessonQCMs(false)} className="text-slate-500 hover:text-red-500"><X size={20} /></button>
-              </div>
-              {lessonQCMsLoading ? (
-                <p className="text-center text-slate-500">Chargement...</p>
-              ) : lessonQCMs.length === 0 ? (
-                <p className="text-center text-slate-500">Aucun QCM disponible pour ce cours.</p>
-              ) : (
-                <div className="space-y-3">
-                  {lessonQCMs.map(qcm => (
-                    <div key={qcm._id} className="flex items-center justify-between p-3 border border-blue-200 dark:border-blue-900/30 rounded-lg bg-blue-50 dark:bg-blue-900/10">
-                      <div>
-                        <p className="font-medium text-slate-800 dark:text-white">
-                          {qcm.title || 'QCM Normal'}
-                        </p>
-                        <p className="text-xs text-slate-500">{qcm.questions?.length || 0} questions · {qcm.durationMinutes} min</p>
-                      </div>
-                      <button
-                        onClick={() => {
-                          setShowLessonQCMs(false);
-                          navigate(`/quiz/lesson/${qcm._id}?type=lesson&title=${encodeURIComponent(qcm.title || 'QCM')}`);
-                        }}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg shadow transition"
-                      >
-                        Démarrer
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* ✅ NOUVEAU : Modale pour afficher les examens par année (avec titres entre parenthèses) */}
+        {/* ✅ Modale pour afficher les QCMs par année (avec titres entre parenthèses) */}
         {showYearQCMs && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-lg w-full p-6 max-h-[80vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
-                <h4 className="text-lg font-bold text-slate-900 dark:text-white">Examens du Module</h4>
+                <h4 className="text-lg font-bold text-slate-900 dark:text-white">Examens par année</h4>
                 <button onClick={() => setShowYearQCMs(false)} className="text-slate-500 hover:text-red-500"><X size={20} /></button>
               </div>
               {yearQCMsList.length === 0 ? (
@@ -514,6 +463,79 @@ function StudentModuleDetail() {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        )}
+
+        {/* ✅ Modale pour afficher les QCMs par cours (avec titres, pas d'années) */}
+        {showLessonQCMs && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-lg w-full p-6 max-h-[80vh] overflow-y-auto">
+              <div className="flex justify-between items-center mb-4">
+                <h4 className="text-lg font-bold text-slate-900 dark:text-white">QCMs par cours</h4>
+                <button onClick={() => setShowLessonQCMs(false)} className="text-slate-500 hover:text-red-500"><X size={20} /></button>
+              </div>
+              {lessonQCMsLoading ? (
+                <p className="text-center text-slate-500">Chargement...</p>
+              ) : lessonQCMs.length === 0 ? (
+                <p className="text-center text-slate-500">Aucun QCM disponible pour ce module.</p>
+              ) : (
+                <div className="space-y-3">
+                  {lessonQCMs.map(qcm => (
+                    <div key={qcm._id} className="flex items-center justify-between p-3 border border-blue-200 dark:border-blue-900/30 rounded-lg bg-blue-50 dark:bg-blue-900/10">
+                      <div>
+                        <p className="font-medium text-slate-800 dark:text-white">
+                          {qcm.title || 'QCM Normal'}
+                          {qcm.lessonId && <span className="text-xs text-blue-600 ml-1">({qcm.lessonId.title})</span>}
+                        </p>
+                        <p className="text-xs text-slate-500">{qcm.questions?.length || 0} questions · {qcm.durationMinutes} min</p>
+                      </div>
+                      <button
+                        onClick={() => {
+                          setShowLessonQCMs(false);
+                          navigate(`/quiz/lesson/${qcm._id}?type=lesson&title=${encodeURIComponent(qcm.title || 'QCM')}`);
+                        }}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm rounded-lg shadow transition"
+                      >
+                        Démarrer
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Modale choix année (pour les catégories Cours, Résumés, etc.) - inchangée */}
+        {showYearPicker && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h4 className="text-lg font-bold text-slate-900 dark:text-white">Choisir une année</h4>
+                <button onClick={() => setShowYearPicker(false)} className="text-slate-500 hover:text-red-500"><X size={20} /></button>
+              </div>
+              <div className="space-y-3 max-h-60 overflow-y-auto">
+                {(() => {
+                  const yearsList = getYearsForCategory(activeCategory);
+                  return yearsList.length > 0 ? yearsList.map(year => (
+                    <button
+                      key={year}
+                      onClick={() => {
+                        if (activeCategory === 'exams-year' || activeCategory === 'exams-lesson') {
+                          handleNavigateToQuiz(year, activeCategory);
+                          setShowYearPicker(false);
+                        } else {
+                          handleYearSelect(year);
+                        }
+                      }}
+                      className="w-full text-left p-3 border border-slate-200 dark:border-slate-700 rounded-lg hover:border-blue-500 transition bg-slate-50 dark:bg-slate-900"
+                    >
+                      <p className="font-medium text-slate-800 dark:text-white">{year}</p>
+                    </button>
+                  )) : <p className="text-center text-slate-500">Aucune année disponible</p>;
+                })()}
+              </div>
             </div>
           </div>
         )}
