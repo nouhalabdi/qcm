@@ -42,8 +42,7 @@ function StudentQuizView() {
   const [isFavorite, setIsFavorite] = useState(false);
   const [togglingFavorite, setTogglingFavorite] = useState(false);
 
-  // États pour l'agrandissement des images
-  const [zoomedImage, setZoomedImage] = useState(null); // url de l'image agrandie
+  const [zoomedImage, setZoomedImage] = useState(null);
 
   // Chargement du quiz
   useEffect(() => {
@@ -88,7 +87,8 @@ function StudentQuizView() {
         setQuiz({
           _id: quizId,
           type: 'lesson',
-          year: '2024-2025',
+          year: '',
+          title: 'Erreur',
           correctionMode: 'immediate',
           durationMinutes: 5,
           questions: [{ questionText: "Erreur de chargement", options: ["Recharger"], correctAnswer: "", explanation: "" }]
@@ -122,8 +122,6 @@ function StudentQuizView() {
 
     let correctCount = 0;
     quiz.questions.forEach((q, idx) => {
-      // Ne compter comme correcte que si la réponse sélectionnée correspond exactement à correctAnswer
-      // Si correctAnswer est vide, aucun choix n'est correct
       if (q.correctAnswer && selectedAnswers[idx] === q.correctAnswer) correctCount++;
     });
     setScore(correctCount);
@@ -157,7 +155,6 @@ function StudentQuizView() {
     setIsFirstAttempt(false);
   };
 
-  // Fonctions de gestion des réponses
   const handleAnswer = (option) => {
     if (isFinished || isReviewMode) return;
     setSelectedAnswers(prev => ({ ...prev, [currentQuestionIndex]: option }));
@@ -299,7 +296,6 @@ function StudentQuizView() {
 
   const effectiveCorrectionMode = (quiz.type !== 'lesson' && isPracticeMode) ? 'immediate' : quiz.correctionMode;
 
-  // Composant d'affichage des images avec zoom
   const ImageGallery = ({ images, alt }) => {
     if (!images || images.length === 0) return null;
     return (
@@ -335,9 +331,15 @@ function StudentQuizView() {
             <h2 className="text-xl font-bold text-slate-800 dark:text-white">
               {isCorrectionOnly ? 'Correction du QCM' : quiz.type === 'lesson' ? 'QCM par cours' : quiz.type === 'simulation' ? 'Simulation' : 'Examen par année'}
             </h2>
-            {/* ✅ Affichage du titre optionnel entre parenthèses */}
+            {/* ✅ Affichage adapté selon le type */}
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              {quiz.year}{quiz.title ? ` (${quiz.title})` : ''}
+              {quiz.type === 'lesson' ? (
+                // Pour lesson : on affiche seulement le titre (ou "QCM Normal" par défaut)
+                <span>{quiz.title || 'QCM Normal'}</span>
+              ) : (
+                // Pour module : année + titre entre parenthèses
+                <span>{quiz.year}{quiz.title ? ` (${quiz.title})` : ''}</span>
+              )}
             </p>
             {isReviewMode && !isCorrectionOnly && <span className="text-xs text-blue-600 dark:text-blue-400 mt-1 block">Mode révision</span>}
           </div>
@@ -392,7 +394,6 @@ function StudentQuizView() {
                 {quiz.questions[currentQuestionIndex].questionText}
               </h3>
 
-              {/* ✅ Affichage des images du sujet */}
               <ImageGallery
                 images={quiz.questions[currentQuestionIndex].questionImages}
                 alt="Image de la question"
@@ -437,7 +438,6 @@ function StudentQuizView() {
                   <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line">
                     <span className="font-bold text-blue-600">Explication :</span> {quiz.questions[currentQuestionIndex].explanation || 'Aucune explication fournie.'}
                   </p>
-                  {/* ✅ Images d'explication avec zoom */}
                   <ImageGallery
                     images={quiz.questions[currentQuestionIndex].explanationImages}
                     alt="Image d'explication"
@@ -534,7 +534,6 @@ function StudentQuizView() {
                 if (q.correctAnswer) {
                   wasCorrect = studentAnswer === q.correctAnswer;
                 } else {
-                  // Si aucune réponse correcte, on considère que c'est faux
                   wasCorrect = false;
                 }
                 return (
@@ -554,28 +553,10 @@ function StudentQuizView() {
                     {quiz.type === 'simulation' && q.explanation && (
                       <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 whitespace-pre-line">{q.explanation}</p>
                     )}
-                    {/* ✅ Images d'explication dans la correction */}
-                    {(q.explanationImages || []).length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {q.explanationImages.map((url, i) => (
-                          <div key={i} className="relative group">
-                            <img
-                              src={url}
-                              alt={`explication ${i+1}`}
-                              className="max-w-[150px] max-h-[120px] object-contain rounded border border-slate-200 dark:border-slate-600 cursor-pointer hover:shadow-lg transition"
-                              onClick={() => setZoomedImage(url)}
-                            />
-                            <button
-                              onClick={() => setZoomedImage(url)}
-                              className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition"
-                              title="Agrandir"
-                            >
-                              <Maximize2 size={12} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                    <ImageGallery
+                      images={q.explanationImages}
+                      alt="Image d'explication"
+                    />
                   </div>
                 );
               })}
@@ -687,7 +668,7 @@ function StudentQuizView() {
           />
         )}
 
-        {/* ✅ Modal d'agrandissement d'image */}
+        {/* Modal d'agrandissement d'image */}
         {zoomedImage && (
           <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={() => setZoomedImage(null)}>
             <div className="relative max-w-4xl max-h-[90vh] flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
