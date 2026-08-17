@@ -164,13 +164,14 @@ const YearFilesBlock = ({ year, versions, onAddFiles, onRemoveFile, onRenameFile
   );
 };
 
-// ---------- QuestionsBuilder ----------
+// ---------- QuestionsBuilder (avec questionImages) ----------
 const emptyQuestion = () => ({
   questionText: '',
   options: ['', ''],
   correctAnswer: '',
   explanation: '',
-  explanationImages: []
+  explanationImages: [],
+  questionImages: []   // ✅ nouveau champ pour les images du sujet
 });
 
 const QuestionsBuilder = ({ questions, onChange, uploadFile }) => {
@@ -208,6 +209,25 @@ const QuestionsBuilder = ({ questions, onChange, uploadFile }) => {
   const addQuestion = () => onChange([...questions, emptyQuestion()]);
   const removeQuestion = (qIndex) => onChange(questions.filter((_, i) => i !== qIndex));
 
+  // Ajout des images pour le sujet (question)
+  const addQuestionImages = async (qIndex, files) => {
+    const urls = [];
+    for (const file of files) {
+      const url = await uploadFile(file);
+      if (url) urls.push(url);
+    }
+    const updated = [...questions];
+    updated[qIndex] = { ...updated[qIndex], questionImages: [...(updated[qIndex].questionImages || []), ...urls] };
+    onChange(updated);
+  };
+
+  const removeQuestionImage = (qIndex, url) => {
+    const updated = [...questions];
+    updated[qIndex] = { ...updated[qIndex], questionImages: updated[qIndex].questionImages.filter(u => u !== url) };
+    onChange(updated);
+  };
+
+  // Ajout des images pour l'explication
   const addExplanationImages = async (qIndex, files) => {
     const urls = [];
     for (const file of files) {
@@ -246,6 +266,35 @@ const QuestionsBuilder = ({ questions, onChange, uploadFile }) => {
             value={q.questionText}
             onChange={(e) => updateQuestion(qIndex, 'questionText', e.target.value)}
           />
+
+          {/* ✅ Images du sujet (question) */}
+          <div className="mb-3">
+            <label className="flex items-center gap-1 text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+              <ImagePlus size={14} /> Images pour la question
+            </label>
+            <input
+              type="file"
+              accept="image/*"
+              multiple
+              className="w-full text-xs text-slate-700 dark:text-slate-300"
+              onChange={(e) => {
+                const files = Array.from(e.target.files);
+                if (files.length) addQuestionImages(qIndex, files);
+                e.target.value = '';
+              }}
+            />
+            {(q.questionImages || []).length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-2">
+                {q.questionImages.map((url, i) => (
+                  <div key={i} className="relative">
+                    <img src={url} alt={`question ${i + 1}`} className="w-16 h-16 object-cover rounded border border-gray-300 dark:border-slate-600" />
+                    <button type="button" onClick={() => removeQuestionImage(qIndex, url)} className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-4 h-4 text-[10px] flex items-center justify-center leading-none">✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">Coche la bonne réponse :</p>
           <div className="space-y-2 mb-3">
             {q.options.map((opt, oIndex) => (
@@ -272,6 +321,7 @@ const QuestionsBuilder = ({ questions, onChange, uploadFile }) => {
             ))}
             <button type="button" onClick={() => addOption(qIndex)} className="text-xs text-blue-600 dark:text-blue-400 hover:underline">+ Ajouter une option</button>
           </div>
+
           <div>
             <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Explication (Optionnel)</label>
             <textarea
@@ -319,7 +369,7 @@ const QuestionsBuilder = ({ questions, onChange, uploadFile }) => {
   );
 };
 
-// ---------- JsonImportBox ----------
+// ---------- JsonImportBox (accepte correctAnswer vide) ----------
 const JsonImportBox = ({ onImport }) => {
   const [showBox, setShowBox] = useState(false);
   const [jsonText, setJsonText] = useState('');
@@ -341,20 +391,23 @@ const JsonImportBox = ({ onImport }) => {
       for (const yearBlock of parsed) {
         if (!Array.isArray(yearBlock.questions)) continue;
         for (const q of yearBlock.questions) {
+          // correctAnswer peut être vide ou absent → on accepte ''
           let correct = '';
           if (q.correctAnswers && Array.isArray(q.correctAnswers) && q.correctAnswers.length > 0 && q.correctAnswers[0] !== '') {
             correct = q.correctAnswers[0];
           } else if (q.correctAnswer && q.correctAnswer !== '') {
             correct = q.correctAnswer;
           }
-          if (q.question && Array.isArray(q.options) && correct !== '') {
+          // Si correct est vide, on garde '' (pas d'erreur)
+          if (q.question && Array.isArray(q.options)) {
             const images = Array.isArray(q.photo) ? q.photo : (q.photo ? [q.photo] : []);
             allQuestions.push({
               questionText: q.question,
               options: [...q.options],
-              correctAnswer: correct,
+              correctAnswer: correct,   // peut être vide
               explanation: q.solutionText || '',
-              explanationImages: images
+              explanationImages: images,
+              questionImages: []        // par défaut, l'import JSON n'a pas d'images de sujet
             });
           }
         }
@@ -367,14 +420,15 @@ const JsonImportBox = ({ onImport }) => {
         } else if (q.correctAnswer && q.correctAnswer !== '') {
           correct = q.correctAnswer;
         }
-        if (q.question && Array.isArray(q.options) && correct !== '') {
+        if (q.question && Array.isArray(q.options)) {
           const images = Array.isArray(q.photo) ? q.photo : (q.photo ? [q.photo] : []);
           allQuestions.push({
             questionText: q.question,
             options: [...q.options],
             correctAnswer: correct,
             explanation: q.solutionText || q.explanation || '',
-            explanationImages: images
+            explanationImages: images,
+            questionImages: []
           });
         }
       }
@@ -416,10 +470,11 @@ const JsonImportBox = ({ onImport }) => {
   );
 };
 
-// ---------- QuizModal (avec isIA) ----------
+// ---------- QuizModal (avec titre optionnel) ----------
 const blankQuiz = (type) => ({
   _id: null,
   type,
+  title: '',           // ✅ titre optionnel
   year: ALL_YEARS[0],
   durationMinutes: 20,
   authorName: '',
@@ -434,14 +489,12 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
   const [loading, setLoading] = useState(false);
   const [editingQuiz, setEditingQuiz] = useState(null);
 
-  // ✅ الدالة المصححة - بدون علامة اقتباس زائدة
   const fetchQuizzes = async () => {
     if (!targetId) {
       setQuizzes([]);
       setLoading(false);
       return;
     }
-    
     setLoading(true);
     try {
       let url;
@@ -450,22 +503,16 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
       } else {
         url = `https://reussite-qcmss-1nc7.onrender.com/api/quizzes?moduleId=${targetId}&type=module`;
       }
-      
-      console.log('🔍 Fetching quizzes:', url);
-      
       const res = await fetch(url);
-      
       if (!res.ok) {
-        console.error(`❌ Server responded with ${res.status}`);
         setQuizzes([]);
         setLoading(false);
         return;
       }
-      
       const data = await res.json();
       setQuizzes(data);
     } catch (err) {
-      console.error('❌ Network error:', err);
+      console.error(err);
       setQuizzes([]);
     }
     setLoading(false);
@@ -493,7 +540,7 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
   };
 
   const openEditBuilder = (quiz) => {
-    setEditingQuiz({ ...quiz, questions: quiz.questions.map(q => ({ ...q, options: [...q.options], explanationImages: [...(q.explanationImages || [])] })) });
+    setEditingQuiz({ ...quiz, questions: quiz.questions.map(q => ({ ...q, options: [...q.options], explanationImages: [...(q.explanationImages || [])], questionImages: [...(q.questionImages || [])] })) });
     setView('builder');
   };
 
@@ -503,12 +550,8 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
       alert("Veuillez indiquer l'auteur.");
       return;
     }
-    for (const q of editingQuiz.questions) {
-      if (!q.correctAnswer) {
-        alert('Chaque question doit avoir une réponse correcte.');
-        return;
-      }
-    }
+    // ❌ On ne vérifie plus la présence de correctAnswer → on autorise les questions sans réponse
+    // On ne fait que vérifier que chaque question a au moins une option (ce qui est déjà le cas)
     try {
       const payload = { ...editingQuiz };
       delete payload._id;
@@ -570,7 +613,8 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
                     {quiz.isIA ? (
                       <span className="text-xs bg-purple-200 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 px-1.5 py-0.5 rounded mr-1">🤖 QCM IA</span>
                     ) : (
-                      `${quiz.year} — `
+                      // ✅ Afficher le titre entre parenthèses s'il existe
+                      `${quiz.year}${quiz.title ? ` (${quiz.title})` : ''} — `
                     )}
                     {quiz.questions.length} question(s)
                   </p>
@@ -594,7 +638,12 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
               {type === 'lesson' ? "Correction après chaque question." : "Correction à la fin."}
             </p>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+              {/* ✅ Titre optionnel */}
+              <div className="col-span-1">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Titre (optionnel)</label>
+                <input type="text" placeholder="Ex: Révision anatomie" className={`w-full ${INPUT_CLASS}`} value={editingQuiz.title || ''} onChange={(e) => setEditingQuiz({ ...editingQuiz, title: e.target.value })} />
+              </div>
               <div>
                 <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
                   Année {type === 'lesson' && editingQuiz.isIA && <span className="text-slate-400">(non applicable — QCM IA)</span>}
@@ -649,7 +698,7 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
   );
 };
 
-// ---------- Composant principal AdminModuleContent ----------
+// ---------- Composant principal AdminModuleContent (inchangé) ----------
 function AdminModuleContent() {
   const { moduleId } = useParams();
   const [moduleTitle, setModuleTitle] = useState('');
@@ -672,7 +721,6 @@ function AdminModuleContent() {
 
   const [quizModal, setQuizModal] = useState({ open: false, type: 'lesson', targetId: null, targetLabel: '' });
 
-  // ✅ Ref pour empêcher les doublons lors de l'upload dans le modal d'édition
   const isUploadingRef = useRef(false);
 
   const uploadFile = async (file) => {
@@ -770,7 +818,6 @@ function AdminModuleContent() {
     setForm(prev => {
       const versions = [...prev.yearContents[year]];
       const existing = versions[versionIndex][field] || [];
-      // Éviter les doublons
       const combined = [...existing];
       newItems.forEach(item => {
         if (!combined.some(ex => ex.url === item.url)) {
@@ -847,9 +894,7 @@ function AdminModuleContent() {
     setIsEditModalOpen(true);
   };
 
-  // ✅ Fonction modifiée avec le flag pour éviter les doublons et vérification d'existence
   const handleEditAddFiles = async (yearIndex, versionIndex, field, files) => {
-    // Empêcher les appels simultanés
     if (isUploadingRef.current) return;
     isUploadingRef.current = true;
 
@@ -866,7 +911,6 @@ function AdminModuleContent() {
       setEditForm(prev => {
         const yearContents = [...prev.yearContents];
         const existing = yearContents[yearIndex].versions[versionIndex][field] || [];
-        // Éviter les doublons
         const combined = [...existing];
         newItems.forEach(item => {
           if (!combined.some(ex => ex.url === item.url)) {
