@@ -66,7 +66,7 @@ function ChatWindow({ conversationId, title, type, user, onClose, onRead }) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // ✅ دالة حذف الرسالة مع قراءة آمنة للـ body (مرة واحدة)
+  // ✅ دالة حذف الرسالة مع معالجة آمنة للأخطاء
   const handleDeleteMessage = async (messageId) => {
     if (!window.confirm("Voulez-vous vraiment supprimer ce message ?")) return;
     try {
@@ -81,20 +81,31 @@ function ChatWindow({ conversationId, title, type, user, onClose, onRead }) {
       } else {
         // قراءة الـ body كـ text مرة واحدة
         const text = await res.text();
-        let errorMsg = `Erreur ${res.status}: Impossible de supprimer le message.`;
-        try {
-          // محاولة تحويل النص إلى JSON
-          const errData = JSON.parse(text);
-          if (errData && errData.message) errorMsg = errData.message;
-        } catch (e) {
-          // إذا لم يكن JSON، نستخدم النص إذا كان قصيراً
-          if (text && text.length < 200) errorMsg = text;
+        let errorMsg = `Erreur ${res.status}`;
+
+        // 1. إذا كان الخطأ 404، فهذا يعني أن المسار غير موجود في الخادم
+        if (res.status === 404) {
+          errorMsg = "⚠️ لا يمكن حذف الرسالة. المسار غير موجود على الخادم (Backend Error 404).";
+        } 
+        // 2. محاولة استخراج الرسالة من JSON إذا أمكن
+        else {
+          try {
+            const errData = JSON.parse(text);
+            if (errData && errData.message) errorMsg = errData.message;
+          } catch (e) {
+            // 3. إذا كان HTML، نعرض رسالة عامة
+            if (text.includes('<!DOCTYPE html>')) {
+              errorMsg = "⚠️ خطأ في الخادم. الرجاء التواصل مع المطور.";
+            } else if (text && text.length < 200) {
+              errorMsg = text;
+            }
+          }
         }
         alert(errorMsg);
       }
     } catch (err) {
       console.error(err);
-      alert("Erreur réseau lors de la suppression.");
+      alert("خطأ في الشبكة. تأكد من اتصالك بالإنترنت.");
     }
   };
 
@@ -108,7 +119,6 @@ function ChatWindow({ conversationId, title, type, user, onClose, onRead }) {
         body: JSON.stringify({ conversationId, senderId: user._id, text: text.trim(), attachments })
       });
       const newMsg = await res.json();
-
       if (!processedIds.current.has(newMsg._id)) {
         processedIds.current.add(newMsg._id);
         setMessages(prev => [...prev, newMsg]);
