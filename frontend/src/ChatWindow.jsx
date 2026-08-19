@@ -18,11 +18,13 @@ function ChatWindow({ conversationId, title, type, user, onClose, onRead }) {
   const fetchMessages = async () => {
     try {
       const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/community/messages/${conversationId}`);
+      if (!res.ok) throw new Error('Erreur chargement messages');
       const data = await res.json();
       data.forEach(msg => processedIds.current.add(msg._id));
       setMessages(data);
     } catch (err) {
       console.error(err);
+      setMessages([]);
     } finally {
       setLoading(false);
     }
@@ -40,11 +42,17 @@ function ChatWindow({ conversationId, title, type, user, onClose, onRead }) {
 
     fetchMessages();
 
+    // ✅ معالجة خطأ 500 دون كسر التطبيق
     fetch(`https://reussite-qcmss-1nc7.onrender.com/api/community/conversations/${conversationId}/read`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ userId: user._id })
-    }).then(() => onRead && onRead());
+    })
+      .then(res => {
+        if (!res.ok) console.warn(`⚠️ Erreur ${res.status} lors du marquage comme lu.`);
+        else onRead && onRead();
+      })
+      .catch(err => console.warn('⚠️ Erreur réseau lors du marquage comme lu:', err));
 
     return () => {
       if (socket) {
@@ -58,7 +66,7 @@ function ChatWindow({ conversationId, title, type, user, onClose, onRead }) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // ✅ دالة حذف الرسالة (فقط للكاتب)
+  // ✅ دالة حذف الرسالة مع معالجة آمنة للأخطاء (تجنب HTML)
   const handleDeleteMessage = async (messageId) => {
     if (!window.confirm("Voulez-vous vraiment supprimer ce message ?")) return;
     try {
@@ -67,12 +75,21 @@ function ChatWindow({ conversationId, title, type, user, onClose, onRead }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user._id })
       });
+
       if (res.ok) {
-        // إزالة الرسالة محلياً فوراً
         setMessages(prev => prev.filter(m => m._id !== messageId));
       } else {
-        const errData = await res.json();
-        alert(`Erreur: ${errData.message || "Impossible de supprimer le message."}`);
+        // قراءة آمنة: نحاول استخراج JSON، وإذا فشل نقرأ النص لتجنب خطأ "Unexpected token <"
+        let errorMsg = `Erreur ${res.status}: Impossible de supprimer le message.`;
+        try {
+          const errData = await res.json();
+          if (errData && errData.message) errorMsg = errData.message;
+        } catch (e) {
+          // إذا لم يكن JSON، نقرأ النص الخام (لن يسبب خطأ)
+          const text = await res.text();
+          if (text && text.length < 200) errorMsg = text; // عرض النص المختصر
+        }
+        alert(errorMsg);
       }
     } catch (err) {
       console.error(err);
