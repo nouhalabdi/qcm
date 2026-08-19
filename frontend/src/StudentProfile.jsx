@@ -406,47 +406,69 @@ function StudentProfile() {
     return stats.completedQuizzes.map(q => q.quizId?._id?.toString() || q.quizId?.toString()).filter(Boolean);
   }, [stats.completedQuizzes]);
 
-  // ✅ المنطق الجديد: إكمال الوحدة يعتمد على الدروس التي تحتوي على محتوى فعلي فقط
+  // ✅ منطق إكمال الوحدة: يعتمد على الدروس (التي تحتوي على محتوى) + QCMs من نوع module و lesson
   const moduleProgress = useMemo(() => {
-    if (modules.length === 0 || allLessons.length === 0) return [];
+    if (modules.length === 0 || allLessons.length === 0 || allQuizzes.length === 0) return [];
 
     return modules.map(mod => {
-      // جلب جميع دروس الوحدة
+      // 1. الدروس المتاحة (تحتوي على محتوى فعلي للسنة المستهدفة)
       const modLessons = allLessons.filter(l => l.moduleId?._id?.toString() === mod._id?.toString());
-      
-      // تصفية الدروس التي تحتوي على محتوى فعلي للسنة المستهدفة فقط
       const availableLessons = modLessons.filter(lesson => {
         const yearContent = (lesson.yearContents || []).find(yc => yc.year === TARGET_ACADEMIC_YEAR);
         if (!yearContent) return false;
-        
-        // التحقق من وجود أي محتوى (pdf, video, summary, td, correction, other, ai, aiSummary)
-        const hasContent = yearContent.versions.some(version => {
-          return (version.pdf?.length > 0 || 
-                  version.video?.length > 0 || 
-                  version.summary?.length > 0 || 
-                  version.td?.length > 0 || 
-                  version.correction?.length > 0 ||
-                  version.other?.length > 0 || 
-                  version.ai?.length > 0 || 
-                  version.aiSummary?.length > 0);
-        });
+        const hasContent = yearContent.versions.some(version =>
+          version.pdf?.length > 0 || version.video?.length > 0 || version.summary?.length > 0 ||
+          version.td?.length > 0 || version.correction?.length > 0 || version.other?.length > 0 ||
+          version.ai?.length > 0 || version.aiSummary?.length > 0
+        );
         return hasContent;
       });
+
+      // 2. QCMs من نوع module (امتحانات الوحدة)
+      const moduleQuizzes = allQuizzes.filter(q =>
+        q.moduleId?._id?.toString() === mod._id?.toString() &&
+        q.type === 'module'
+      );
+
+      // 3. QCMs من نوع lesson (دروس الوحدة) - اختياري، لكن يمكن تضمينها
+      const lessonQuizzes = allQuizzes.filter(q =>
+        q.lessonId && (q.lessonId._id || q.lessonId) && 
+        allLessons.some(l => l._id?.toString() === (q.lessonId._id || q.lessonId)?.toString() && 
+          l.moduleId?._id?.toString() === mod._id?.toString()
+        ) &&
+        q.type === 'lesson'
+      );
 
       const totalLessons = availableLessons.length;
       const readLessonsCount = availableLessons.filter(l => readLessonIds.includes(l._id?.toString())).length;
 
-      // الوحدة مكتملة إذا تم دراسة جميع الدروس المتاحة (التي تحتوي على محتوى)
-      const isComplete = (totalLessons > 0 && readLessonsCount === totalLessons);
+      const totalModuleQuizzes = moduleQuizzes.length;
+      const completedModuleQuizzes = moduleQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
+
+      const totalLessonQuizzes = lessonQuizzes.length;
+      const completedLessonQuizzes = lessonQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
+
+      // الوحدة مكتملة إذا:
+      // - تم قراءة جميع الدروس المتاحة
+      // - تم إكمال جميع امتحانات الوحدة (module)
+      // - تم إكمال جميع QCMs الخاصة بالدروس (lesson)
+      const isComplete = 
+        (totalLessons === 0 || readLessonsCount === totalLessons) &&
+        (totalModuleQuizzes === 0 || completedModuleQuizzes === totalModuleQuizzes) &&
+        (totalLessonQuizzes === 0 || completedLessonQuizzes === totalLessonQuizzes);
 
       return {
         ...mod,
         totalLessons,
         readLessonsCount,
+        totalModuleQuizzes,
+        completedModuleQuizzes,
+        totalLessonQuizzes,
+        completedLessonQuizzes,
         isComplete
       };
     });
-  }, [modules, allLessons, readLessonIds]);
+  }, [modules, allLessons, allQuizzes, readLessonIds, completedQuizIds]);
 
   const lessonStatus = useMemo(() => {
     return allLessons.map(lesson => ({
@@ -462,27 +484,26 @@ function StudentProfile() {
     }));
   }, [allQuizzes, completedQuizIds]);
 
-  // ✅ دروس غير مقروءة: فقط التي تحتوي على محتوى للسنة المستهدفة
+  // ✅ دروس غير مقروءة (للسنة المستهدفة فقط)
   const unreadLessons = useMemo(() => {
     return lessonStatus.filter(l => {
-      const hasTargetYear = (l.yearContents || []).some(yc => yc.year === TARGET_ACADEMIC_YEAR);
-      // نتأكد أيضاً من وجود محتوى فعلي
       const yearContent = (l.yearContents || []).find(yc => yc.year === TARGET_ACADEMIC_YEAR);
-      const hasContent = yearContent?.versions.some(version => 
+      if (!yearContent) return false;
+      const hasContent = yearContent.versions.some(version =>
         version.pdf?.length > 0 || version.video?.length > 0 || version.summary?.length > 0 ||
         version.td?.length > 0 || version.correction?.length > 0 || version.other?.length > 0 ||
         version.ai?.length > 0 || version.aiSummary?.length > 0
       );
-      return !l.isRead && hasTargetYear && hasContent;
+      return !l.isRead && hasContent;
     });
   }, [lessonStatus]);
 
-  // ✅ وحدات غير مكتملة: التي تحتوي على دروس غير مقروءة
+  // ✅ وحدات غير مكتملة (للسنة المستهدفة فقط)
   const incompleteModules = useMemo(() => {
     return moduleProgress.filter(m => !m.isComplete);
   }, [moduleProgress]);
 
-  // ✅ QCMs: تبقى كما هي (جميع السنوات)
+  // ✅ QCMs غير محلولة (جميع السنوات)
   const unresolvedQuizzes = useMemo(() => {
     return quizStatus.filter(q => !q.isResolved && (q.type === 'lesson' || q.type === 'module'));
   }, [quizStatus]);
@@ -727,13 +748,12 @@ function StudentProfile() {
                   <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
                     {unresolvedQuizzes.slice(0, showAllQuizzes ? unresolvedQuizzes.length : 5).map((quiz) => {
                       const moduleName = getModuleNameFromQuiz(quiz);
-                      const lessonName = quiz.lessonId?.title || '';
                       return (
                         <div key={quiz._id} className="flex items-center justify-between text-sm p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                          <span className="text-slate-700 dark:text-slate-300 truncate break-words">
+                          <span className="text-slate-700 dark:text-slate-300 truncate break-words whitespace-normal">
                             {quiz.type === 'module' ? (
-                              // Examen par année: عرض اسم الوحدة والسنة
-                              <>Examen - {moduleName} ({quiz.year})</>
+                              // QCM par année: عرض اسم الوحدة والسنة فقط (تمت إزالة كلمة Examen)
+                              <>{moduleName} ({quiz.year})</>
                             ) : quiz.isIA ? (
                               // QCM IA: عرض عنوان QCM واسم الوحدة
                               <>QCM IA - {quiz.title || 'QCM sans titre'} ({moduleName})</>
@@ -771,7 +791,7 @@ function StudentProfile() {
               </div>
             </div>
 
-            {/* ✅ Modules - يعتمد فقط على الدروس التي تحتوي على محتوى فعلي للسنة 2026-2027 */}
+            {/* ✅ Modules - يعتمد على الدروس + QCMs الموجودة فقط للسنة 2026-2027 */}
             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
               <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
                 <Award size={18} className="text-purple-600" /> Modules ({TARGET_ACADEMIC_YEAR})
@@ -782,7 +802,9 @@ function StudentProfile() {
                   <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
                     {incompleteModules.slice(0, showAllModules ? incompleteModules.length : 5).map((mod) => (
                       <div key={mod._id} className="flex items-center justify-between text-sm p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                        <span className="text-slate-700 dark:text-slate-300 truncate">{mod.title}</span>
+                        <span className="text-slate-700 dark:text-slate-300 truncate">
+                          {mod.title} - {mod.semester || 'Semestre inconnu'}
+                        </span>
                         <button
                           onClick={() => navigate(`/cours/module/${mod._id}`)}
                           className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded-lg transition flex items-center gap-1"
