@@ -430,7 +430,7 @@ function StudentProfile() {
         q.type === 'module'
       );
 
-      // 3. QCMs من نوع lesson (دروس الوحدة) - اختياري، لكن يمكن تضمينها
+      // 3. QCMs من نوع lesson (دروس الوحدة) - نأخذ فقط تلك التي تنتمي لدرس من هذه الوحدة
       const lessonQuizzes = allQuizzes.filter(q =>
         q.lessonId && (q.lessonId._id || q.lessonId) && 
         allLessons.some(l => l._id?.toString() === (q.lessonId._id || q.lessonId)?.toString() && 
@@ -448,14 +448,10 @@ function StudentProfile() {
       const totalLessonQuizzes = lessonQuizzes.length;
       const completedLessonQuizzes = lessonQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
 
-      // الوحدة مكتملة إذا:
-      // - تم قراءة جميع الدروس المتاحة
-      // - تم إكمال جميع امتحانات الوحدة (module)
-      // - تم إكمال جميع QCMs الخاصة بالدروس (lesson)
-      const isComplete = 
-        (totalLessons === 0 || readLessonsCount === totalLessons) &&
-        (totalModuleQuizzes === 0 || completedModuleQuizzes === totalModuleQuizzes) &&
-        (totalLessonQuizzes === 0 || completedLessonQuizzes === totalLessonQuizzes);
+      // ✅ تصحيح شرط الإكمال: فقط إذا كان هناك دروس فعلية يتم حساب الإكمال
+      const isComplete = (totalLessons > 0 && readLessonsCount === totalLessons) &&
+                         (totalModuleQuizzes === 0 || completedModuleQuizzes === totalModuleQuizzes) &&
+                         (totalLessonQuizzes === 0 || completedLessonQuizzes === totalLessonQuizzes);
 
       return {
         ...mod,
@@ -498,9 +494,9 @@ function StudentProfile() {
     });
   }, [lessonStatus]);
 
-  // ✅ وحدات غير مكتملة (للسنة المستهدفة فقط)
+  // ✅ وحدات غير مكتملة: فقط التي تحتوي على دروس للسنة المستهدفة ولم تكتمل بعد
   const incompleteModules = useMemo(() => {
-    return moduleProgress.filter(m => !m.isComplete);
+    return moduleProgress.filter(m => !m.isComplete && m.totalLessons > 0);
   }, [moduleProgress]);
 
   // ✅ QCMs غير محلولة (جميع السنوات)
@@ -755,11 +751,11 @@ function StudentProfile() {
                               // QCM par année: عرض اسم الوحدة والسنة فقط (تمت إزالة كلمة Examen)
                               <>{moduleName} ({quiz.year})</>
                             ) : quiz.isIA ? (
-                              // QCM IA: عرض عنوان QCM واسم الوحدة
-                              <>QCM IA - {quiz.title || 'QCM sans titre'} ({moduleName})</>
+                              // QCM IA: عرض عنوان QCM إذا وجد، وإلا عرض QCM IA فقط
+                              <>QCM IA{quiz.title ? ` - ${quiz.title}` : ''} ({moduleName})</>
                             ) : (
-                              // QCM par cours: عرض عنوان QCM واسم الوحدة
-                              <>QCM Cours - {quiz.title || 'QCM sans titre'} ({moduleName})</>
+                              // QCM par cours: عرض عنوان QCM إذا وجد، وإلا عرض QCM Cours فقط
+                              <>QCM Cours{quiz.title ? ` - ${quiz.title}` : ''} ({moduleName})</>
                             )}
                           </span>
                           <button
