@@ -21,7 +21,7 @@ const formatDateNice = (date) => {
   return date.toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' });
 };
 
-// ---------- Composant TodoCalendar ----------
+// ---------- Composant TodoCalendar (inchangé) ----------
 const TodoCalendar = ({ todoList, onAdd, onToggle, onDelete, onEdit }) => {
   const [viewDate, setViewDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -450,7 +450,7 @@ function StudentProfile() {
     });
   }, [modules, allLessons, allQuizzes, readLessonIds, completedQuizIds]);
 
-  // ✅ FILTRE: Cours non lus UNIQUEMENT pour l'année de l'utilisateur (user.year)
+  // ✅ الفلترة بناءً على سنة المستخدم (مثلاً 2026-2027)
   const lessonStatus = useMemo(() => {
     return allLessons.map(lesson => ({
       ...lesson,
@@ -458,8 +458,9 @@ function StudentProfile() {
     }));
   }, [allLessons, readLessonIds]);
 
+  // ✅ دروس غير مقروءة: فقط التابعة لسنة المستخدم
   const unreadLessons = useMemo(() => {
-    // Récupérer les IDs des modules qui appartiennent à l'année de l'utilisateur
+    // جلب معرفات الوحدات الخاصة بسنة المستخدم فقط
     const currentYearModuleIds = modules.filter(m => m.year === user.year).map(m => m._id.toString());
     return lessonStatus.filter(l => {
       const modId = l.moduleId?._id?.toString() || l.moduleId?.toString();
@@ -467,7 +468,7 @@ function StudentProfile() {
     });
   }, [lessonStatus, modules, user.year]);
 
-  // ✅ FILTRE: Modules non complétés UNIQUEMENT pour l'année de l'utilisateur (user.year)
+  // ✅ وحدات غير مكتملة: فقط التابعة لسنة المستخدم
   const incompleteModules = useMemo(() => {
     return moduleProgress.filter(m => !m.isComplete && m.year === user.year);
   }, [moduleProgress, user.year]);
@@ -479,7 +480,7 @@ function StudentProfile() {
     }));
   }, [allQuizzes, completedQuizIds]);
 
-  // ✅ FILTRE: Les QCMs restent affichés pour TOUTES les années
+  // ✅ QCMs: كل السنوات (بدون فلترة)
   const unresolvedQuizzes = useMemo(() => {
     return quizStatus.filter(q => !q.isResolved && (q.type === 'lesson' || q.type === 'module'));
   }, [quizStatus]);
@@ -713,7 +714,7 @@ function StudentProfile() {
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Cours : FILTRÉ PAR ANNÉE */}
+            {/* Cours - فلترة بسنة المستخدم */}
             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
               <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
                 <BookOpen size={18} className="text-blue-600" /> Cours ({user.year})
@@ -753,7 +754,7 @@ function StudentProfile() {
               </div>
             </div>
 
-            {/* QCMs : TOUTES LES ANNÉES */}
+            {/* QCMs - كل السنوات */}
             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
               <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
                 <Zap size={18} className="text-yellow-600" /> QCMs
@@ -799,7 +800,7 @@ function StudentProfile() {
               </div>
             </div>
 
-            {/* Modules : FILTRÉ PAR ANNÉE */}
+            {/* Modules - فلترة بسنة المستخدم */}
             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
               <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
                 <Award size={18} className="text-purple-600" /> Modules ({user.year})
