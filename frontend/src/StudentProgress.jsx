@@ -298,18 +298,6 @@ function StudentProgress() {
     setChartData(data);
   }, [filterPeriod, stats.readLessons, stats.completedQuizzes, prepareChartData]);
 
-  // ✅ FILTRE: Cours lus UNIQUEMENT pour l'année de l'utilisateur
-  const filteredReadLessons = useMemo(() => {
-    const currentYearModuleIds = allModules.filter(m => m.year === user.year).map(m => m._id.toString());
-    return stats.readLessons.filter(r => {
-      const lessonId = r.lessonId?._id || r.lessonId;
-      const lesson = allLessons.find(l => l._id === lessonId);
-      if (!lesson) return false;
-      const moduleId = lesson.moduleId?._id || lesson.moduleId;
-      return currentYearModuleIds.includes(moduleId?.toString());
-    });
-  }, [stats.readLessons, allLessons, allModules, user.year]);
-
   const getPeriodLabel = () => {
     switch (filterPeriod) {
       case 'week': return 'Cette semaine';
@@ -490,14 +478,13 @@ function StudentProgress() {
 
         {/* Détails */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* ✅ Cours lus filtrés par année */}
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
             <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
-              <BookOpen size={18} className="text-blue-600" /> Cours lus ({user.year})
+              <BookOpen size={18} className="text-blue-600" /> Cours lus
             </h4>
             <div className="space-y-2 max-h-60 overflow-y-auto">
-              {filteredReadLessons?.length > 0 ? (
-                filteredReadLessons.map((r, i) => {
+              {stats.readLessons?.length > 0 ? (
+                stats.readLessons.map((r, i) => {
                   const lessonId = r.lessonId?._id || r.lessonId;
                   const lesson = allLessons.find(l => l._id === lessonId);
                   const moduleId = lesson?.moduleId?._id || lesson?.moduleId;
@@ -518,12 +505,11 @@ function StudentProgress() {
                   );
                 })
               ) : (
-                <p className="text-xs text-slate-400">Aucun cours lu pour l'année {user.year}.</p>
+                <p className="text-xs text-slate-400">Aucun cours lu.</p>
               )}
             </div>
           </div>
 
-          {/* QCMs résolus (toutes années) */}
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
             <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
               <Zap size={18} className="text-yellow-600" /> QCMs résolus
