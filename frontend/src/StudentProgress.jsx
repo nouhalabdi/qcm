@@ -479,11 +479,11 @@ function StudentProgress() {
                           // QCM par année: عرض اسم الوحدة والسنة فقط (تمت إزالة كلمة Examen)
                           <>{moduleName} ({q.quizId?.year || 'Année inconnue'})</>
                         ) : q.type === 'lesson' && q.quizId?.isIA ? (
-                          // QCM IA: عرض عنوان QCM واسم الوحدة
-                          <>QCM IA - {q.quizId?.title || 'QCM sans titre'} ({moduleName})</>
+                          // QCM IA: عرض عنوان QCM إذا وجد، وإلا عرض QCM IA فقط
+                          <>QCM IA{q.quizId?.title ? ` - ${q.quizId?.title}` : ''} ({moduleName})</>
                         ) : q.type === 'lesson' ? (
-                          // QCM par cours: عرض عنوان QCM واسم الوحدة
-                          <>QCM Cours - {q.quizId?.title || 'QCM sans titre'} ({moduleName})</>
+                          // QCM par cours: عرض عنوان QCM إذا وجد، وإلا عرض QCM Cours فقط
+                          <>QCM Cours{q.quizId?.title ? ` - ${q.quizId?.title}` : ''} ({moduleName})</>
                         ) : (
                           // نوع آخر (مثل simulation) - يبقى كما هو
                           <>{q.type === 'simulation' ? 'Simulation' : 'QCM'} - {moduleName}</>
