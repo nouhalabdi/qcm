@@ -276,14 +276,24 @@ function StudentProgress() {
     }
   };
 
-  // ✅ فلترة الدروس المقروءة: فقط التي تحتوي على محتوى للسنة 2026-2027
+  // ✅ فلترة الدروس المقروءة: فقط التي تحتوي على محتوى فعلي للسنة 2026-2027
   const filteredReadLessons = useMemo(() => {
     if (!allLessons || !stats.readLessons) return [];
     return stats.readLessons.filter(r => {
       const lessonId = r.lessonId?._id || r.lessonId;
       const lesson = allLessons.find(l => l._id === lessonId);
       if (!lesson) return false;
-      return (lesson.yearContents || []).some(yc => yc.year === TARGET_ACADEMIC_YEAR);
+      
+      const yearContent = (lesson.yearContents || []).find(yc => yc.year === TARGET_ACADEMIC_YEAR);
+      if (!yearContent) return false;
+      
+      // التحقق من وجود محتوى فعلي
+      const hasContent = yearContent.versions.some(version => 
+        version.pdf?.length > 0 || version.video?.length > 0 || version.summary?.length > 0 ||
+        version.td?.length > 0 || version.correction?.length > 0 || version.other?.length > 0 ||
+        version.ai?.length > 0 || version.aiSummary?.length > 0
+      );
+      return hasContent;
     });
   }, [stats.readLessons, allLessons]);
 
@@ -420,7 +430,7 @@ function StudentProgress() {
 
         {/* Détails */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* ✅ Cours lus: فقط التي تحتوي على محتوى للسنة 2026-2027 */}
+          {/* ✅ Cours lus: فقط الدروس التي تحتوي على محتوى فعلي للسنة 2026-2027 */}
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
             <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
               <BookOpen size={18} className="text-blue-600" /> Cours lus ({TARGET_ACADEMIC_YEAR})
@@ -453,7 +463,7 @@ function StudentProgress() {
             </div>
           </div>
 
-          {/* QCMs résolus: كل السنوات مع عناوينها الصحيحة */}
+          {/* QCMs résolus: كل السنوات (مع تحسين العرض) */}
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
             <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
               <Zap size={18} className="text-yellow-600" /> QCMs résolus
@@ -461,27 +471,25 @@ function StudentProgress() {
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {stats.completedQuizzes?.length > 0 ? (
                 stats.completedQuizzes.map((q, i) => {
-                  let displayText = '';
                   const moduleName = getModuleNameFromQuiz(q.quizId || q);
                   const lessonName = q.quizId?.lessonId?.title || '';
-                  const typeLabel = q.type === 'module' ? 'Examen' : q.type === 'simulation' ? 'Simulation' : 'QCM cours';
-
-                  if (q.type === 'module') {
-                    const moduleYear = q.quizId?.year || 'Année inconnue';
-                    displayText = `${moduleName} (${moduleYear})`;
-                  } else if (q.type === 'lesson' && q.quizId?.isIA) {
-                    displayText = q.quizId?.title || 'QCM IA';
-                  } else if (q.type === 'lesson') {
-                    displayText = q.quizId?.title || 'QCM Par cours';
-                  } else {
-                    displayText = `${typeLabel} - ${moduleName} ${lessonName && `(${lessonName})`}`;
-                  }
-
                   return (
                     <div key={i} className="flex items-center gap-2 text-sm p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
                       <CheckCircle size={14} className="text-green-600" />
-                      <span className="text-slate-700 dark:text-slate-300 truncate">
-                        {displayText}
+                      <span className="text-slate-700 dark:text-slate-300 truncate break-words">
+                        {q.type === 'module' ? (
+                          // Examen par année: عرض اسم الوحدة والسنة
+                          <>Examen - {moduleName} ({q.quizId?.year || 'Année inconnue'})</>
+                        ) : q.type === 'lesson' && q.quizId?.isIA ? (
+                          // QCM IA: عرض عنوان QCM واسم الوحدة
+                          <>QCM IA - {q.quizId?.title || 'QCM sans titre'} ({moduleName})</>
+                        ) : q.type === 'lesson' ? (
+                          // QCM par cours: عرض عنوان QCM واسم الوحدة
+                          <>QCM Cours - {q.quizId?.title || 'QCM sans titre'} ({moduleName})</>
+                        ) : (
+                          // نوع آخر (مثل simulation) - يبقى كما هو
+                          <>{q.type === 'simulation' ? 'Simulation' : 'QCM'} - {moduleName}</>
+                        )}
                       </span>
                       <span className="text-xs text-slate-400 ml-auto">{q.score}%</span>
                     </div>
