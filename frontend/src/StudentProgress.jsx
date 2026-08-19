@@ -276,14 +276,13 @@ function StudentProgress() {
     }
   };
 
-  // ✅ فلترة الدروس المقروءة: فقط التي تحمل السنة الأكاديمية 2026-2027
+  // ✅ فلترة الدروس المقروءة: فقط التي تحتوي على محتوى للسنة 2026-2027
   const filteredReadLessons = useMemo(() => {
     if (!allLessons || !stats.readLessons) return [];
     return stats.readLessons.filter(r => {
       const lessonId = r.lessonId?._id || r.lessonId;
       const lesson = allLessons.find(l => l._id === lessonId);
       if (!lesson) return false;
-      // التحقق من أن الدرس يحتوي على السنة الأكاديمية 2026-2027
       return (lesson.yearContents || []).some(yc => yc.year === TARGET_ACADEMIC_YEAR);
     });
   }, [stats.readLessons, allLessons]);
@@ -421,7 +420,7 @@ function StudentProgress() {
 
         {/* Détails */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* ✅ Cours lus: فقط التي تحمل السنة الأكاديمية 2026-2027 */}
+          {/* ✅ Cours lus: فقط التي تحتوي على محتوى للسنة 2026-2027 */}
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
             <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
               <BookOpen size={18} className="text-blue-600" /> Cours lus ({TARGET_ACADEMIC_YEAR})
@@ -454,7 +453,7 @@ function StudentProgress() {
             </div>
           </div>
 
-          {/* QCMs résolus: كل السنوات */}
+          {/* QCMs résolus: كل السنوات مع عناوينها الصحيحة */}
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
             <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
               <Zap size={18} className="text-yellow-600" /> QCMs résolus
@@ -462,14 +461,27 @@ function StudentProgress() {
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {stats.completedQuizzes?.length > 0 ? (
                 stats.completedQuizzes.map((q, i) => {
-                  const typeLabel = q.type === 'module' ? 'Examen' : q.type === 'simulation' ? 'Simulation' : 'QCM cours';
+                  let displayText = '';
                   const moduleName = getModuleNameFromQuiz(q.quizId || q);
                   const lessonName = q.quizId?.lessonId?.title || '';
+                  const typeLabel = q.type === 'module' ? 'Examen' : q.type === 'simulation' ? 'Simulation' : 'QCM cours';
+
+                  if (q.type === 'module') {
+                    const moduleYear = q.quizId?.year || 'Année inconnue';
+                    displayText = `${moduleName} (${moduleYear})`;
+                  } else if (q.type === 'lesson' && q.quizId?.isIA) {
+                    displayText = q.quizId?.title || 'QCM IA';
+                  } else if (q.type === 'lesson') {
+                    displayText = q.quizId?.title || 'QCM Par cours';
+                  } else {
+                    displayText = `${typeLabel} - ${moduleName} ${lessonName && `(${lessonName})`}`;
+                  }
+
                   return (
                     <div key={i} className="flex items-center gap-2 text-sm p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
                       <CheckCircle size={14} className="text-green-600" />
                       <span className="text-slate-700 dark:text-slate-300 truncate">
-                        {typeLabel} - {moduleName} {lessonName && `(${lessonName})`}
+                        {displayText}
                       </span>
                       <span className="text-xs text-slate-400 ml-auto">{q.score}%</span>
                     </div>
