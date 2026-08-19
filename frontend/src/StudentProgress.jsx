@@ -283,12 +283,11 @@ function StudentProgress() {
       const lessonId = r.lessonId?._id || r.lessonId;
       const lesson = allLessons.find(l => l._id === lessonId);
       if (!lesson) return false;
-      
+
       const yearContent = (lesson.yearContents || []).find(yc => yc.year === TARGET_ACADEMIC_YEAR);
       if (!yearContent) return false;
-      
-      // التحقق من وجود محتوى فعلي
-      const hasContent = yearContent.versions.some(version => 
+
+      const hasContent = yearContent.versions.some(version =>
         version.pdf?.length > 0 || version.video?.length > 0 || version.summary?.length > 0 ||
         version.td?.length > 0 || version.correction?.length > 0 || version.other?.length > 0 ||
         version.ai?.length > 0 || version.aiSummary?.length > 0
@@ -472,14 +471,13 @@ function StudentProgress() {
               {stats.completedQuizzes?.length > 0 ? (
                 stats.completedQuizzes.map((q, i) => {
                   const moduleName = getModuleNameFromQuiz(q.quizId || q);
-                  const lessonName = q.quizId?.lessonId?.title || '';
                   return (
                     <div key={i} className="flex items-center gap-2 text-sm p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
                       <CheckCircle size={14} className="text-green-600" />
-                      <span className="text-slate-700 dark:text-slate-300 truncate break-words">
+                      <span className="text-slate-700 dark:text-slate-300 truncate break-words whitespace-normal">
                         {q.type === 'module' ? (
-                          // Examen par année: عرض اسم الوحدة والسنة
-                          <>Examen - {moduleName} ({q.quizId?.year || 'Année inconnue'})</>
+                          // QCM par année: عرض اسم الوحدة والسنة فقط (تمت إزالة كلمة Examen)
+                          <>{moduleName} ({q.quizId?.year || 'Année inconnue'})</>
                         ) : q.type === 'lesson' && q.quizId?.isIA ? (
                           // QCM IA: عرض عنوان QCM واسم الوحدة
                           <>QCM IA - {q.quizId?.title || 'QCM sans titre'} ({moduleName})</>
