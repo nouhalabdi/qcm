@@ -14,6 +14,9 @@ function StudentProgress() {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user'));
 
+  // السنة الأكاديمية المطلوبة
+  const TARGET_ACADEMIC_YEAR = '2026-2027';
+
   // بيانات الإحصائيات الأساسية
   const [stats, setStats] = useState({
     progress: 0,
@@ -24,7 +27,7 @@ function StudentProgress() {
     readLessons: [],
     completedQuizzes: [],
   });
-  const [loading, setLoading] = useState(true);
+
   const [filterPeriod, setFilterPeriod] = useState('week');
   const [chartData, setChartData] = useState([]);
 
@@ -32,7 +35,6 @@ function StudentProgress() {
   const [allModules, setAllModules] = useState([]);
   const [allLessons, setAllLessons] = useState([]);
   const [allQuizzes, setAllQuizzes] = useState([]);
-  const [extraLoading, setExtraLoading] = useState(true);
   const extraFetched = useRef(false);
 
   // --- حساب متوسط النقاط ---
@@ -41,31 +43,6 @@ function StudentProgress() {
     const total = stats.completedQuizzes.reduce((acc, q) => acc + (q.score || 0), 0);
     return Math.round(total / stats.completedQuizzes.length);
   }, [stats.completedQuizzes]);
-
-  // --- حساب الوحدات المكتملة ---
-  const moduleStats = useMemo(() => {
-    if (allModules.length === 0 || allQuizzes.length === 0 || stats.completedQuizzes.length === 0) {
-      return { totalModules: 0, completedModules: 0 };
-    }
-
-    const completedQuizIds = stats.completedQuizzes.map(q => String(q.quizId?._id || q.quizId));
-
-    let total = 0;
-    let completed = 0;
-
-    allModules.forEach(mod => {
-      const moduleQuizzes = allQuizzes.filter(q => 
-        q.moduleId?._id?.toString() === mod._id?.toString() && 
-        q.type === 'module'
-      );
-      if (moduleQuizzes.length === 0) return;
-      total++;
-      const resolvedCount = moduleQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
-      if (resolvedCount === moduleQuizzes.length) completed++;
-    });
-
-    return { totalModules: total, completedModules: completed };
-  }, [allModules, allQuizzes, stats.completedQuizzes]);
 
   // --- تحميل بيانات المستخدم ---
   useEffect(() => {
@@ -100,11 +77,8 @@ function StudentProgress() {
           completedLessonQCMs: completedQuizzes.filter(q => q.type === 'lesson').length,
           completedExams: completedQuizzes.filter(q => q.type === 'module' || q.type === 'simulation').length
         });
-
-        setLoading(false);
       } catch (err) {
         console.error(err);
-        setLoading(false);
       }
     };
 
@@ -139,14 +113,11 @@ function StudentProgress() {
     };
 
     const fetchExtraData = async () => {
-      setExtraLoading(true);
-
       const cachedData = loadFromCache();
       if (cachedData) {
         setAllModules(cachedData.modules);
         setAllLessons(cachedData.allLessons);
         setAllQuizzes(cachedData.allQuizzes);
-        setExtraLoading(false);
         return;
       }
 
@@ -187,8 +158,6 @@ function StudentProgress() {
         });
       } catch (err) {
         console.error('Erreur chargement données extra:', err);
-      } finally {
-        setExtraLoading(false);
       }
     };
 
@@ -288,7 +257,7 @@ function StudentProgress() {
     }));
   }, []);
 
-  // --- تحديث المنحنى عند تغيير الفلتر ---
+  // --- تحديث المنحنى ---
   useEffect(() => {
     if (stats.readLessons.length === 0 && stats.completedQuizzes.length === 0) {
       setChartData([]);
@@ -307,60 +276,19 @@ function StudentProgress() {
     }
   };
 
-  // ✅ فلترة الدروس المقروءة: فقط التي تنتمي لسنة المستخدم
+  // ✅ فلترة الدروس المقروءة: فقط التي تحمل السنة الأكاديمية 2026-2027
   const filteredReadLessons = useMemo(() => {
-    if (!allModules || !allLessons || !stats.readLessons) return [];
-    // معرفات الوحدات التي تنتمي لسنة المستخدم
-    const currentYearModuleIds = allModules.filter(m => m.year === user.year).map(m => m._id.toString());
-    
+    if (!allLessons || !stats.readLessons) return [];
     return stats.readLessons.filter(r => {
       const lessonId = r.lessonId?._id || r.lessonId;
       const lesson = allLessons.find(l => l._id === lessonId);
       if (!lesson) return false;
-      const moduleId = lesson.moduleId?._id || lesson.moduleId;
-      return currentYearModuleIds.includes(moduleId?.toString());
+      // التحقق من أن الدرس يحتوي على السنة الأكاديمية 2026-2027
+      return (lesson.yearContents || []).some(yc => yc.year === TARGET_ACADEMIC_YEAR);
     });
-  }, [stats.readLessons, allLessons, allModules, user.year]);
+  }, [stats.readLessons, allLessons]);
 
-  // ---------- Skeleton de chargement ----------
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 md:p-8">
-        <div className="max-w-6xl mx-auto space-y-6 animate-pulse">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-10 h-10 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
-            <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-48"></div>
-          </div>
-          <div className="bg-white dark:bg-slate-800 p-4 rounded-xl">
-            <div className="flex flex-wrap items-center gap-3">
-              <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-20"></div>
-              <div className="flex gap-2">
-                {[...Array(4)].map((_, i) => (
-                  <div key={i} className="h-8 bg-slate-200 dark:bg-slate-700 rounded-lg w-16"></div>
-                ))}
-              </div>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {[...Array(4)].map((_, i) => (
-              <div key={i} className="bg-white dark:bg-slate-800 p-4 rounded-xl">
-                <div className="flex items-center gap-3">
-                  <div className="w-5 h-5 bg-slate-200 dark:bg-slate-700 rounded"></div>
-                  <div><div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-16"></div><div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-12 mt-1"></div></div>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="bg-white dark:bg-slate-800 p-6 rounded-xl">
-            <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-40 mb-4"></div>
-            <div className="h-64 bg-slate-200 dark:bg-slate-700 rounded"></div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ---------- JSX ----------
+  // ---------- JSX (تمت إزالة شاشة التحميل لتصبح الصفحة سريعة) ----------
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 md:p-8">
       <div className="max-w-6xl mx-auto">
@@ -493,10 +421,10 @@ function StudentProgress() {
 
         {/* Détails */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* ✅ Cours lus: فقط التي تنتمي لسنة المستخدم */}
+          {/* ✅ Cours lus: فقط التي تحمل السنة الأكاديمية 2026-2027 */}
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
             <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
-              <BookOpen size={18} className="text-blue-600" /> Cours lus ({user.year})
+              <BookOpen size={18} className="text-blue-600" /> Cours lus ({TARGET_ACADEMIC_YEAR})
             </h4>
             <div className="space-y-2 max-h-60 overflow-y-auto">
               {filteredReadLessons?.length > 0 ? (
@@ -521,7 +449,7 @@ function StudentProgress() {
                   );
                 })
               ) : (
-                <p className="text-xs text-slate-400">Aucun cours lu pour l'année {user.year}.</p>
+                <p className="text-xs text-slate-400">Aucun cours lu pour {TARGET_ACADEMIC_YEAR}.</p>
               )}
             </div>
           </div>
