@@ -42,7 +42,8 @@ function StudentQuizView() {
   const [isFavorite, setIsFavorite] = useState(false);
   const [togglingFavorite, setTogglingFavorite] = useState(false);
 
-  const [zoomedImage, setZoomedImage] = useState(null);
+  // États pour l'agrandissement des images
+  const [zoomedImage, setZoomedImage] = useState(null); // url de l'image agrandie
 
   // Chargement du quiz
   useEffect(() => {
@@ -87,8 +88,7 @@ function StudentQuizView() {
         setQuiz({
           _id: quizId,
           type: 'lesson',
-          year: '',
-          title: 'Erreur',
+          year: '2024-2025',
           correctionMode: 'immediate',
           durationMinutes: 5,
           questions: [{ questionText: "Erreur de chargement", options: ["Recharger"], correctAnswer: "", explanation: "" }]
@@ -155,6 +155,7 @@ function StudentQuizView() {
     setIsFirstAttempt(false);
   };
 
+  // Fonctions de gestion des réponses
   const handleAnswer = (option) => {
     if (isFinished || isReviewMode) return;
     setSelectedAnswers(prev => ({ ...prev, [currentQuestionIndex]: option }));
@@ -296,6 +297,7 @@ function StudentQuizView() {
 
   const effectiveCorrectionMode = (quiz.type !== 'lesson' && isPracticeMode) ? 'immediate' : quiz.correctionMode;
 
+  // Composant d'affichage des images avec zoom
   const ImageGallery = ({ images, alt }) => {
     if (!images || images.length === 0) return null;
     return (
@@ -331,15 +333,8 @@ function StudentQuizView() {
             <h2 className="text-xl font-bold text-slate-800 dark:text-white">
               {isCorrectionOnly ? 'Correction du QCM' : quiz.type === 'lesson' ? 'QCM par cours' : quiz.type === 'simulation' ? 'Simulation' : 'Examen par année'}
             </h2>
-            {/* ✅ Affichage adapté selon le type */}
             <p className="text-sm text-slate-500 dark:text-slate-400">
-              {quiz.type === 'lesson' ? (
-                // Pour lesson : on affiche seulement le titre (ou "QCM Normal" par défaut)
-                <span>{quiz.title || 'QCM Normal'}</span>
-              ) : (
-                // Pour module : année + titre entre parenthèses
-                <span>{quiz.year}{quiz.title ? ` (${quiz.title})` : ''}</span>
-              )}
+              {quiz.year}{quiz.title ? ` (${quiz.title})` : ''}
             </p>
             {isReviewMode && !isCorrectionOnly && <span className="text-xs text-blue-600 dark:text-blue-400 mt-1 block">Mode révision</span>}
           </div>
@@ -360,7 +355,8 @@ function StudentQuizView() {
               <MessageCircle size={18} />
             </button>
 
-            {quiz.type === 'lesson' && (
+            {/* ✅ زر المفضلة يعمل الآن لكل من QCM par cours (lesson) و Examen par année (module) */}
+            {(quiz.type === 'lesson' || quiz.type === 'module') && (
               <button onClick={toggleQuizFavorite} disabled={togglingFavorite} className={`p-2 rounded-full transition ${isFavorite ? 'bg-red-100 text-red-500 dark:bg-red-900/30' : 'bg-slate-100 text-slate-400 dark:bg-slate-700 hover:text-red-400'}`} title="Ajouter / Retirer des favoris">
                 <Heart size={18} fill={isFavorite ? "currentColor" : "none"} />
               </button>
@@ -553,10 +549,27 @@ function StudentQuizView() {
                     {quiz.type === 'simulation' && q.explanation && (
                       <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 whitespace-pre-line">{q.explanation}</p>
                     )}
-                    <ImageGallery
-                      images={q.explanationImages}
-                      alt="Image d'explication"
-                    />
+                    {(q.explanationImages || []).length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {q.explanationImages.map((url, i) => (
+                          <div key={i} className="relative group">
+                            <img
+                              src={url}
+                              alt={`explication ${i+1}`}
+                              className="max-w-[150px] max-h-[120px] object-contain rounded border border-slate-200 dark:border-slate-600 cursor-pointer hover:shadow-lg transition"
+                              onClick={() => setZoomedImage(url)}
+                            />
+                            <button
+                              onClick={() => setZoomedImage(url)}
+                              className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition"
+                              title="Agrandir"
+                            >
+                              <Maximize2 size={12} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -668,7 +681,7 @@ function StudentQuizView() {
           />
         )}
 
-        {/* Modal d'agrandissement d'image */}
+        {/* ✅ Modal d'agrandissement d'image */}
         {zoomedImage && (
           <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={() => setZoomedImage(null)}>
             <div className="relative max-w-4xl max-h-[90vh] flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
