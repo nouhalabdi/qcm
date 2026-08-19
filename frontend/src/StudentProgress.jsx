@@ -42,7 +42,7 @@ function StudentProgress() {
     return Math.round(total / stats.completedQuizzes.length);
   }, [stats.completedQuizzes]);
 
-  // --- حساب الوحدات المكتملة (للاحتفاظ بها إن أردت استخدامها في مكان آخر) ---
+  // --- حساب الوحدات المكتملة ---
   const moduleStats = useMemo(() => {
     if (allModules.length === 0 || allQuizzes.length === 0 || stats.completedQuizzes.length === 0) {
       return { totalModules: 0, completedModules: 0 };
@@ -111,7 +111,7 @@ function StudentProgress() {
     fetchStats();
   }, [user, navigate]);
 
-  // --- تحميل البيانات الإضافية مع cache ---
+  // --- تحميل البيانات الإضافية ---
   useEffect(() => {
     if (!user || !user.year || extraFetched.current) return;
     extraFetched.current = true;
@@ -288,7 +288,7 @@ function StudentProgress() {
     }));
   }, []);
 
-  // --- تحديث المنحنى عند تغيير الفلتر أو البيانات ---
+  // --- تحديث المنحنى عند تغيير الفلتر ---
   useEffect(() => {
     if (stats.readLessons.length === 0 && stats.completedQuizzes.length === 0) {
       setChartData([]);
@@ -306,6 +306,21 @@ function StudentProgress() {
       default: return 'Depuis le début';
     }
   };
+
+  // ✅ فلترة الدروس المقروءة: فقط التي تنتمي لسنة المستخدم
+  const filteredReadLessons = useMemo(() => {
+    if (!allModules || !allLessons || !stats.readLessons) return [];
+    // معرفات الوحدات التي تنتمي لسنة المستخدم
+    const currentYearModuleIds = allModules.filter(m => m.year === user.year).map(m => m._id.toString());
+    
+    return stats.readLessons.filter(r => {
+      const lessonId = r.lessonId?._id || r.lessonId;
+      const lesson = allLessons.find(l => l._id === lessonId);
+      if (!lesson) return false;
+      const moduleId = lesson.moduleId?._id || lesson.moduleId;
+      return currentYearModuleIds.includes(moduleId?.toString());
+    });
+  }, [stats.readLessons, allLessons, allModules, user.year]);
 
   // ---------- Skeleton de chargement ----------
   if (loading) {
@@ -478,13 +493,14 @@ function StudentProgress() {
 
         {/* Détails */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {/* ✅ Cours lus: فقط التي تنتمي لسنة المستخدم */}
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
             <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
-              <BookOpen size={18} className="text-blue-600" /> Cours lus
+              <BookOpen size={18} className="text-blue-600" /> Cours lus ({user.year})
             </h4>
             <div className="space-y-2 max-h-60 overflow-y-auto">
-              {stats.readLessons?.length > 0 ? (
-                stats.readLessons.map((r, i) => {
+              {filteredReadLessons?.length > 0 ? (
+                filteredReadLessons.map((r, i) => {
                   const lessonId = r.lessonId?._id || r.lessonId;
                   const lesson = allLessons.find(l => l._id === lessonId);
                   const moduleId = lesson?.moduleId?._id || lesson?.moduleId;
@@ -505,11 +521,12 @@ function StudentProgress() {
                   );
                 })
               ) : (
-                <p className="text-xs text-slate-400">Aucun cours lu.</p>
+                <p className="text-xs text-slate-400">Aucun cours lu pour l'année {user.year}.</p>
               )}
             </div>
           </div>
 
+          {/* QCMs résolus: كل السنوات */}
           <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700">
             <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
               <Zap size={18} className="text-yellow-600" /> QCMs résolus
