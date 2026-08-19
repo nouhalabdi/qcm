@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Send, Paperclip, Heart, FileText, Loader2, Users, User as UserIcon } from 'lucide-react';
+import { X, Send, Paperclip, Heart, FileText, Loader2, Users, User as UserIcon, Trash2 } from 'lucide-react';
 import io from 'socket.io-client';
 
 let socket = null;
@@ -13,13 +13,13 @@ function ChatWindow({ conversationId, title, type, user, onClose, onRead }) {
 
   const bottomRef = useRef(null);
   const fileInputRef = useRef(null);
-  const processedIds = useRef(new Set()); // ✅ لتتبع الرسائل المضافة
+  const processedIds = useRef(new Set());
 
   const fetchMessages = async () => {
     try {
       const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/community/messages/${conversationId}`);
       const data = await res.json();
-      data.forEach(msg => processedIds.current.add(msg._id)); // تسجيل الرسائل الحالية
+      data.forEach(msg => processedIds.current.add(msg._id));
       setMessages(data);
     } catch (err) {
       console.error(err);
@@ -33,7 +33,6 @@ function ChatWindow({ conversationId, title, type, user, onClose, onRead }) {
     socket.emit('join-room', conversationId);
 
     socket.on('new-message', (msg) => {
-      // ✅ منع التكرار: إذا كان المعرف موجوداً بالفعل، لا نضيف
       if (processedIds.current.has(msg._id)) return;
       processedIds.current.add(msg._id);
       setMessages((prev) => [...prev, msg]);
@@ -59,6 +58,28 @@ function ChatWindow({ conversationId, title, type, user, onClose, onRead }) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
+  // ✅ دالة حذف الرسالة (فقط للكاتب)
+  const handleDeleteMessage = async (messageId) => {
+    if (!window.confirm("Voulez-vous vraiment supprimer ce message ?")) return;
+    try {
+      const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/community/messages/${messageId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user._id })
+      });
+      if (res.ok) {
+        // إزالة الرسالة محلياً فوراً
+        setMessages(prev => prev.filter(m => m._id !== messageId));
+      } else {
+        const errData = await res.json();
+        alert(`Erreur: ${errData.message || "Impossible de supprimer le message."}`);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Erreur réseau lors de la suppression.");
+    }
+  };
+
   const handleSend = async (attachments = []) => {
     if (!text.trim() && attachments.length === 0) return;
     setSending(true);
@@ -70,7 +91,6 @@ function ChatWindow({ conversationId, title, type, user, onClose, onRead }) {
       });
       const newMsg = await res.json();
 
-      // ✅ نتحققو أولاً: واش الـ socket سبق وزادها (وصلات عبر new-message قبل ما يرجع الـ fetch)
       if (!processedIds.current.has(newMsg._id)) {
         processedIds.current.add(newMsg._id);
         setMessages(prev => [...prev, newMsg]);
@@ -182,6 +202,16 @@ function ChatWindow({ conversationId, title, type, user, onClose, onRead }) {
                       <span className="text-[10px] text-slate-400">
                         {new Date(msg.createdAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
                       </span>
+                      {/* ✅ زر الحذف للكاتب فقط */}
+                      {isMine && (
+                        <button
+                          onClick={() => handleDeleteMessage(msg._id)}
+                          className="text-red-400 hover:text-red-600 transition ml-1"
+                          title="Supprimer ce message"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
