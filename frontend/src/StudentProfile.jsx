@@ -450,7 +450,12 @@ function StudentProfile() {
     });
   }, [modules, allLessons, allQuizzes, readLessonIds, completedQuizIds]);
 
-  const incompleteModules = moduleProgress.filter(m => !m.isComplete);
+  // ✅ في هذا القسم سنقوم بتصفية الدروس والوحدات بحسب سنة المستخدم
+
+  // استخراج معرفات الوحدات الخاصة بسنة المستخدم
+  const currentYearModuleIds = useMemo(() => {
+    return modules.filter(m => m.year === user.year).map(m => m._id.toString());
+  }, [modules, user.year]);
 
   const lessonStatus = useMemo(() => {
     return allLessons.map(lesson => ({
@@ -459,6 +464,14 @@ function StudentProfile() {
     }));
   }, [allLessons, readLessonIds]);
 
+  // ✅ الدروس غير المقروءة: فقط تلك التي تتبع وحدة من وحدات سنة المستخدم
+  const unreadLessons = useMemo(() => {
+    return lessonStatus.filter(l => {
+      const modId = l.moduleId?._id?.toString() || l.moduleId?.toString();
+      return !l.isRead && currentYearModuleIds.includes(modId);
+    });
+  }, [lessonStatus, currentYearModuleIds]);
+
   const quizStatus = useMemo(() => {
     return allQuizzes.map(quiz => ({
       ...quiz,
@@ -466,8 +479,15 @@ function StudentProfile() {
     }));
   }, [allQuizzes, completedQuizIds]);
 
-  const unreadLessons = lessonStatus.filter(l => !l.isRead);
-  const unresolvedQuizzes = quizStatus.filter(q => !q.isResolved && (q.type === 'lesson' || q.type === 'module'));
+  // ✅ QCMs: تبقى كما هي (جميع السنوات)
+  const unresolvedQuizzes = useMemo(() => {
+    return quizStatus.filter(q => !q.isResolved && (q.type === 'lesson' || q.type === 'module'));
+  }, [quizStatus]);
+
+  // ✅ الوحدات غير المكتملة: فقط التي تنتمي لسنة المستخدم
+  const incompleteModules = useMemo(() => {
+    return moduleProgress.filter(m => !m.isComplete && m.year === user.year);
+  }, [moduleProgress, user.year]);
 
   // ---------- Skeleton de chargement ----------
   if (loading) {
@@ -698,10 +718,10 @@ function StudentProfile() {
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Cours */}
+            {/* ✅ Cours - يظهر فقط ما يخص سنة المستخدم */}
             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
               <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
-                <BookOpen size={18} className="text-blue-600" /> Cours
+                <BookOpen size={18} className="text-blue-600" /> Cours ({user.year})
               </h4>
               <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Non lus ({unreadLessons.length}) :</p>
@@ -733,12 +753,12 @@ function StudentProfile() {
                     )}
                   </div>
                 ) : (
-                  <p className="text-xs text-green-600 mt-1">Tous les cours sont lus !</p>
+                  <p className="text-xs text-green-600 mt-1">Tous les cours de {user.year} sont lus !</p>
                 )}
               </div>
             </div>
 
-            {/* QCMs */}
+            {/* ✅ QCMs - تبقى لكل السنوات */}
             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
               <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
                 <Zap size={18} className="text-yellow-600" /> QCMs
@@ -784,10 +804,10 @@ function StudentProfile() {
               </div>
             </div>
 
-            {/* Modules */}
+            {/* ✅ Modules - يظهر فقط ما يخص سنة المستخدم */}
             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
               <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
-                <Award size={18} className="text-purple-600" /> Modules
+                <Award size={18} className="text-purple-600" /> Modules ({user.year})
               </h4>
               <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Non complétés ({incompleteModules.length}) :</p>
@@ -816,7 +836,7 @@ function StudentProfile() {
                     )}
                   </div>
                 ) : (
-                  <p className="text-xs text-green-600 mt-1">Tous les modules sont complétés ! 🎉</p>
+                  <p className="text-xs text-green-600 mt-1">Tous les modules de {user.year} sont complétés ! 🎉</p>
                 )}
               </div>
             </div>
