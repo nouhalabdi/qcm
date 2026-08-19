@@ -66,7 +66,7 @@ function ChatWindow({ conversationId, title, type, user, onClose, onRead }) {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  // ✅ دالة حذف الرسالة مع معالجة آمنة للأخطاء (تجنب HTML)
+  // ✅ دالة حذف الرسالة مع قراءة آمنة للـ body (مرة واحدة)
   const handleDeleteMessage = async (messageId) => {
     if (!window.confirm("Voulez-vous vraiment supprimer ce message ?")) return;
     try {
@@ -79,15 +79,16 @@ function ChatWindow({ conversationId, title, type, user, onClose, onRead }) {
       if (res.ok) {
         setMessages(prev => prev.filter(m => m._id !== messageId));
       } else {
-        // قراءة آمنة: نحاول استخراج JSON، وإذا فشل نقرأ النص لتجنب خطأ "Unexpected token <"
+        // قراءة الـ body كـ text مرة واحدة
+        const text = await res.text();
         let errorMsg = `Erreur ${res.status}: Impossible de supprimer le message.`;
         try {
-          const errData = await res.json();
+          // محاولة تحويل النص إلى JSON
+          const errData = JSON.parse(text);
           if (errData && errData.message) errorMsg = errData.message;
         } catch (e) {
-          // إذا لم يكن JSON، نقرأ النص الخام (لن يسبب خطأ)
-          const text = await res.text();
-          if (text && text.length < 200) errorMsg = text; // عرض النص المختصر
+          // إذا لم يكن JSON، نستخدم النص إذا كان قصيراً
+          if (text && text.length < 200) errorMsg = text;
         }
         alert(errorMsg);
       }
