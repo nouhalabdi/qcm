@@ -406,32 +406,30 @@ function StudentProfile() {
     return stats.completedQuizzes.map(q => q.quizId?._id?.toString() || q.quizId?.toString()).filter(Boolean);
   }, [stats.completedQuizzes]);
 
-  // حساب تقدم الموديولات
+  // ✅ حساب تقدم الموديولات يعتمد فقط على الدروس التي تم إدخالها فعلياً للسنة المستهدفة
   const moduleProgress = useMemo(() => {
-    if (modules.length === 0 || allLessons.length === 0 || allQuizzes.length === 0) return [];
+    if (modules.length === 0 || allLessons.length === 0) return [];
 
     return modules.map(mod => {
-      const modLessons = allLessons.filter(l => l.moduleId?._id?.toString() === mod._id?.toString());
+      // الدروس التي تنتمي لهذه الوحدة وتحتوي على محتوى للسنة المستهدفة
+      const modLessons = allLessons.filter(l => 
+        l.moduleId?._id?.toString() === mod._id?.toString() && 
+        (l.yearContents || []).some(yc => yc.year === TARGET_ACADEMIC_YEAR)
+      );
+      
       const totalLessons = modLessons.length;
       const readLessonsCount = modLessons.filter(l => readLessonIds.includes(l._id?.toString())).length;
 
-      const modQuizzes = allQuizzes.filter(q => q.moduleId?._id?.toString() === mod._id?.toString() && q.type === 'module');
-      const totalQuizzes = modQuizzes.length;
-      const completedQuizzesCount = modQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
-
-      const isComplete = (totalLessons > 0 && readLessonsCount === totalLessons) &&
-                         (totalQuizzes > 0 && completedQuizzesCount === totalQuizzes);
+      const isComplete = (totalLessons > 0 && readLessonsCount === totalLessons);
 
       return {
         ...mod,
         totalLessons,
         readLessonsCount,
-        totalQuizzes,
-        completedQuizzesCount,
         isComplete
       };
     });
-  }, [modules, allLessons, allQuizzes, readLessonIds, completedQuizIds]);
+  }, [modules, allLessons, readLessonIds]);
 
   const lessonStatus = useMemo(() => {
     return allLessons.map(lesson => ({
@@ -447,27 +445,20 @@ function StudentProfile() {
     }));
   }, [allQuizzes, completedQuizIds]);
 
-  // ✅ الفلترة الصحيحة: فقط الدروس والوحدات التي تحمل السنة الأكاديمية 2026-2027
+  // ✅ الدروس غير المقروءة: فقط التي تحتوي على محتوى للسنة المستهدفة
   const unreadLessons = useMemo(() => {
     return lessonStatus.filter(l => {
-      // التحقق من أن الدرس يحتوي على سنة أكاديمية 2026-2027
       const hasTargetYear = (l.yearContents || []).some(yc => yc.year === TARGET_ACADEMIC_YEAR);
       return !l.isRead && hasTargetYear;
     });
   }, [lessonStatus]);
 
+  // ✅ الوحدات غير المكتملة: فقط التي تحتوي على دروس للسنة المستهدفة
   const incompleteModules = useMemo(() => {
-    // التأكد من أن الوحدة تحتوي على دروس للسنة 2026-2027
-    return moduleProgress.filter(m => {
-      const hasTargetYearLesson = allLessons.some(l => {
-        const modId = l.moduleId?._id?.toString() || l.moduleId?.toString();
-        return modId === m._id?.toString() && (l.yearContents || []).some(yc => yc.year === TARGET_ACADEMIC_YEAR);
-      });
-      return !m.isComplete && hasTargetYearLesson;
-    });
-  }, [moduleProgress, allLessons]);
+    return moduleProgress.filter(m => !m.isComplete && m.totalLessons > 0);
+  }, [moduleProgress]);
 
-  // ✅ QCMs: تبقى كما هي (جميع السنوات)
+  // ✅ QCMs غير المحلولة (جميع السنوات) مع عرض العنوان المناسب
   const unresolvedQuizzes = useMemo(() => {
     return quizStatus.filter(q => !q.isResolved && (q.type === 'lesson' || q.type === 'module'));
   }, [quizStatus]);
@@ -701,7 +692,7 @@ function StudentProfile() {
               </div>
             </div>
 
-            {/* ✅ QCMs - تبقى لكل السنوات */}
+            {/* ✅ QCMs - تبقى لكل السنوات مع عناوينها الصحيحة */}
             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
               <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
                 <Zap size={18} className="text-yellow-600" /> QCMs
@@ -711,12 +702,27 @@ function StudentProfile() {
                 {unresolvedQuizzes.length > 0 ? (
                   <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
                     {unresolvedQuizzes.slice(0, showAllQuizzes ? unresolvedQuizzes.length : 5).map((quiz) => {
+                      let displayText = '';
                       const moduleName = getModuleNameFromQuiz(quiz);
-                      const lessonName = quiz.lessonId?.title || '';
+                      
+                      if (quiz.type === 'module') {
+                        // QCM de module: عرض اسم الوحدة مع السنة بين قوسين
+                        const moduleYear = quiz.year || 'Année inconnue';
+                        displayText = `${moduleName} (${moduleYear})`;
+                      } else if (quiz.type === 'lesson' && quiz.isIA) {
+                        // QCM IA: عرض عنوان QCM الذي حدده الأدمن
+                        displayText = quiz.title || 'QCM IA';
+                      } else if (quiz.type === 'lesson') {
+                        // QCM درس عادي: عرض عنوان QCM الذي حدده الأدمن
+                        displayText = quiz.title || 'QCM Par cours';
+                      } else {
+                        displayText = `${moduleName} ${lessonName && `(${lessonName})`}`;
+                      }
+
                       return (
                         <div key={quiz._id} className="flex items-center justify-between text-sm p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
                           <span className="text-slate-700 dark:text-slate-300 truncate">
-                            {moduleName} {lessonName && `(${lessonName})`}
+                            {displayText}
                           </span>
                           <button
                             onClick={() => {
