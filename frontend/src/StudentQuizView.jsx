@@ -1,7 +1,7 @@
 // StudentQuizView.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { Clock, CheckCircle, XCircle, ArrowLeft, ArrowRight, Save, X, FileText, Trophy, Heart, MessageCircle, Maximize2, Minimize2, Trash2, Pencil } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, ArrowLeft, ArrowRight, Save, X, FileText, Trophy, Heart, MessageCircle, Maximize2, Minimize2 } from 'lucide-react';
 import ChatWindow from './ChatWindow';
 
 function StudentQuizView() {
@@ -190,11 +190,8 @@ function StudentQuizView() {
     }
   };
 
-  // --- Chat per question (if needed) ---
+  // --- Chat per question ---
   const openQuestionChat = async (index) => {
-    // Create a conversation for this specific question? 
-    // For simplicity, we can reuse the quiz chat or create a new one.
-    // But for now, we'll use the existing quiz chat.
     try {
       const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/community/conversations/quiz/${quizId}?userId=${user._id}`);
       const conv = await res.json();
@@ -366,7 +363,7 @@ function StudentQuizView() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-3 sm:p-6 flex items-center justify-center">
       <div className="w-full max-w-4xl bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-4 sm:p-6 border border-slate-200 dark:border-slate-700 relative">
 
-        {/* --- Header (simplified) --- */}
+        {/* --- Header with per-question buttons --- */}
         <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-100 dark:border-slate-700 flex-wrap gap-2">
           <div>
             <h2 className="text-xl font-bold text-slate-800 dark:text-white">
@@ -379,40 +376,9 @@ function StudentQuizView() {
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
-            {quiz.type !== 'lesson' && !isFinished && !isReviewMode && (
-              <button
-                onClick={() => setIsPracticeMode(!isPracticeMode)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                  isPracticeMode ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                }`}
-              >
-                {isPracticeMode ? 'Mode Entraînement' : 'Mode Examen'}
-              </button>
-            )}
-            <button onClick={handleExit} className="p-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full hover:bg-red-200 dark:hover:bg-red-900/50 transition" title="Quitter l'examen">
-              <X size={20} />
-            </button>
-          </div>
-        </div>
-
-        {/* --- Content --- */}
-        {!isFinished && !isReviewMode ? (
-          <div>
-            <div className="flex-1">
-              <div className="flex justify-between items-center mb-4">
-                <p className="text-xs text-slate-400">Question {currentQuestionIndex + 1} / {totalQuestions}</p>
-                <div className="flex items-center gap-2 text-sm font-bold text-blue-600 dark:text-blue-400">
-                  <Clock size={18} />
-                  <span>{formatTime(timeLeft)}</span>
-                </div>
-              </div>
-
-              <h3 className="text-lg font-medium text-slate-800 dark:text-white mb-4">
-                {quiz.questions[currentQuestionIndex].questionText}
-              </h3>
-
-              {/* Per-question action buttons */}
-              <div className="flex items-center gap-2 mb-4">
+            {/* Boutons spécifiques à la question courante */}
+            {!isFinished && !isReviewMode && (
+              <>
                 <button
                   onClick={() => toggleFavoriteQuestion(currentQuestionIndex)}
                   className="p-2 rounded-full transition hover:bg-gray-100 dark:hover:bg-slate-700"
@@ -434,7 +400,41 @@ function StudentQuizView() {
                 >
                   <MessageCircle size={20} className="text-slate-400" />
                 </button>
+              </>
+            )}
+
+            {quiz.type !== 'lesson' && !isFinished && !isReviewMode && (
+              <button
+                onClick={() => setIsPracticeMode(!isPracticeMode)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                  isPracticeMode ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                }`}
+              >
+                {isPracticeMode ? 'Mode Entraînement' : 'Mode Examen'}
+              </button>
+            )}
+
+            <button onClick={handleExit} className="p-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full hover:bg-red-200 dark:hover:bg-red-900/50 transition" title="Quitter l'examen">
+              <X size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* --- Content --- */}
+        {!isFinished && !isReviewMode ? (
+          <div>
+            <div className="flex-1">
+              <div className="flex justify-between items-center mb-4">
+                <p className="text-xs text-slate-400">Question {currentQuestionIndex + 1} / {totalQuestions}</p>
+                <div className="flex items-center gap-2 text-sm font-bold text-blue-600 dark:text-blue-400">
+                  <Clock size={18} />
+                  <span>{formatTime(timeLeft)}</span>
+                </div>
               </div>
+
+              <h3 className="text-lg font-medium text-slate-800 dark:text-white mb-4">
+                {quiz.questions[currentQuestionIndex].questionText}
+              </h3>
 
               <ImageGallery
                 images={quiz.questions[currentQuestionIndex].questionImages}
