@@ -21,7 +21,7 @@ const formatDateNice = (date) => {
   return date.toLocaleDateString('fr-FR', { month: 'short', day: 'numeric' });
 };
 
-// ---------- Composant TodoCalendar (inchangé) ----------
+// ---------- Composant TodoCalendar ----------
 const TodoCalendar = ({ todoList, onAdd, onToggle, onDelete, onEdit }) => {
   const [viewDate, setViewDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
@@ -119,6 +119,9 @@ function StudentProfile() {
   const navigate = useNavigate();
   const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('user')));
 
+  // السنة الأكاديمية المطلوبة (يتم اختيارها من طرف الأدمن)
+  const TARGET_ACADEMIC_YEAR = '2026-2027';
+
   // États pour les données du profil
   const [stats, setStats] = useState({
     progress: 0, completedExams: 0, completedLessonQCMs: 0,
@@ -126,14 +129,12 @@ function StudentProfile() {
     quizNotes: [], favoriteLessons: [], favoriteQuizzes: [], todoList: [],
     completedQuizzes: [], readLessons: []
   });
-  const [loading, setLoading] = useState(true);
   const [todoList, setTodoList] = useState([]);
 
   // États pour les données supplémentaires (cours, modules, QCMs)
   const [modules, setModules] = useState([]);
   const [allLessons, setAllLessons] = useState([]);
   const [allQuizzes, setAllQuizzes] = useState([]);
-  const [loadingExtra, setLoadingExtra] = useState(true);
   const extraFetched = useRef(false);
 
   // États pour les statistiques du jour
@@ -155,7 +156,7 @@ function StudentProfile() {
   const [showAllQuizzes, setShowAllQuizzes] = useState(false);
   const [showAllModules, setShowAllModules] = useState(false);
 
-  // ---------- Chargement des données principales ----------
+  // ---------- Chargement des données principales (سريع جداً) ----------
   useEffect(() => {
     if (!user || !user._id) {
       navigate('/auth');
@@ -189,24 +190,21 @@ function StudentProfile() {
         setPeriodStats({
           day: { exams: examsCount, avg, lessons: lessonsCount, qcmLessons: qcmLessonsCount, progress }
         });
-
-        setLoading(false);
       } catch (err) {
         console.error(err);
-        setLoading(false);
       }
     };
 
     fetchStats();
   }, [user, navigate]);
 
-  // ---------- Chargement des données supplémentaires avec cache localStorage ----------
+  // ---------- Chargement des données supplémentaires ----------
   useEffect(() => {
     if (!user || !user.year || extraFetched.current) return;
     extraFetched.current = true;
 
     const CACHE_KEY = `profile_extra_${user.year}`;
-    const CACHE_EXPIRY = 5 * 60 * 1000; // 5 minutes
+    const CACHE_EXPIRY = 5 * 60 * 1000;
 
     const loadFromCache = () => {
       try {
@@ -228,25 +226,19 @@ function StudentProfile() {
     };
 
     const fetchExtraData = async () => {
-      setLoadingExtra(true);
-
-      // Vérifier le cache
       const cachedData = loadFromCache();
       if (cachedData) {
         setModules(cachedData.modules);
         setAllLessons(cachedData.allLessons);
         setAllQuizzes(cachedData.allQuizzes);
-        setLoadingExtra(false);
         return;
       }
 
       try {
-        // جلب الموديولات
         const modulesRes = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/modules?year=${user.year}`);
         const modulesData = await modulesRes.json();
         setModules(modulesData);
 
-        // جلب الدروس و QCMs بالتوازي مع Promise.allSettled
         const lessonsPromises = modulesData.map(mod =>
           fetch(`https://reussite-qcmss-1nc7.onrender.com/api/lessons?moduleId=${mod._id}`).then(r => r.json())
         );
@@ -264,30 +256,21 @@ function StudentProfile() {
 
         if (lessonsResults.status === 'fulfilled') {
           allLessonsData = lessonsResults.value.flat();
-        } else {
-          console.warn('Erreur chargement des leçons:', lessonsResults.reason);
         }
-
         if (quizzesResults.status === 'fulfilled') {
           allQuizzesData = quizzesResults.value.flat();
-        } else {
-          console.warn('Erreur chargement des QCMs:', quizzesResults.reason);
         }
 
         setAllLessons(allLessonsData);
         setAllQuizzes(allQuizzesData);
 
-        // Sauvegarder dans le cache
         saveToCache({
           modules: modulesData,
           allLessons: allLessonsData,
           allQuizzes: allQuizzesData
         });
-
       } catch (err) {
         console.error('Erreur chargement données supplémentaires:', err);
-      } finally {
-        setLoadingExtra(false);
       }
     };
 
@@ -376,7 +359,7 @@ function StudentProfile() {
 
   const handleLogout = () => { localStorage.clear(); navigate('/auth'); window.location.reload(); };
 
-  // ---------- Fonctions utilitaires pour récupérer le nom du module ----------
+  // ---------- Fonctions utilitaires ----------
   const getModuleNameFromQuiz = (quiz) => {
     if (!quiz) return 'Module inconnu';
     if (quiz.moduleId && typeof quiz.moduleId === 'object' && quiz.moduleId.title) {
@@ -423,68 +406,68 @@ function StudentProfile() {
     return stats.completedQuizzes.map(q => q.quizId?._id?.toString() || q.quizId?.toString()).filter(Boolean);
   }, [stats.completedQuizzes]);
 
-  // ✅ السنة المستهدفة لحساب الإكمال - غير المحتوى المدخل لهاذي السنة كيتحسب
-  const TARGET_YEAR = '2026-2027';
-
-  // ✅ درس/محتوى "مُدخل فعلاً" = عندو على الأقل ملف واحد (كور، TD، تصحيح، ملخص، فيديو...) لسنة TARGET_YEAR
-  const hasContentForYear = (versions) => {
-    if (!versions) return false;
-    return versions.some(v =>
-      (v.pdfUrls?.length > 0) ||
-      (v.tdUrls?.length > 0) ||
-      (v.correctionUrls?.length > 0) ||
-      (v.summaryUrls?.length > 0) ||
-      (v.videoUrls?.length > 0) ||
-      (v.otherUrls?.length > 0) ||
-      (v.aiUrls?.length > 0)
-    );
-  };
-
-  // حساب تقدم الموديولات - يأخذ بعين الاعتبار فقط ما تم إدخاله لسنة 2026-2027
+  // ✅ منطق إكمال الوحدة (المعدل لضمان ظهور الوحدات)
   const moduleProgress = useMemo(() => {
-    if (modules.length === 0) return [];
+    if (modules.length === 0 || allLessons.length === 0 || allQuizzes.length === 0) return [];
 
-    return modules
-      .map(mod => {
-        // ✅ غير الدروس اللي عندها محتوى مُدخل فعلاً لسنة 2026-2027 (الباقي ما يتحسبش خالص)
-        const modLessons = allLessons.filter(l => {
-          if (l.moduleId?._id?.toString() !== mod._id?.toString()) return false;
-          const yc = (l.yearContents || []).find(y => y.year === TARGET_YEAR);
-          return yc && hasContentForYear(yc.versions);
-        });
-        const totalLessons = modLessons.length;
-        const readLessonsCount = modLessons.filter(l => readLessonIds.includes(l._id?.toString())).length;
+    return modules.map(mod => {
+      // 1. جميع دروس الوحدة التي لها سنة مستهدفة (حتى لو فارغة)
+      const allTargetYearLessons = allLessons.filter(l =>
+        l.moduleId?._id?.toString() === mod._id?.toString() &&
+        (l.yearContents || []).some(yc => yc.year === TARGET_ACADEMIC_YEAR)
+      );
 
-        // ✅ غير QCMs (Examens) اللي مربوطين بسنة 2026-2027 بالضبط
-        const modQuizzes = allQuizzes.filter(q =>
-          q.moduleId?._id?.toString() === mod._id?.toString() &&
-          q.type === 'module' &&
-          q.year === TARGET_YEAR
+      // 2. الدروس التي تحتوي على محتوى فعلي (هذه فقط التي سيطلب من الطالب دراستها)
+      const availableLessons = allTargetYearLessons.filter(lesson => {
+        const yearContent = (lesson.yearContents || []).find(yc => yc.year === TARGET_ACADEMIC_YEAR);
+        if (!yearContent) return false;
+        return yearContent.versions.some(version =>
+          version.pdf?.length > 0 || version.video?.length > 0 || version.summary?.length > 0 ||
+          version.td?.length > 0 || version.correction?.length > 0 || version.other?.length > 0 ||
+          version.ai?.length > 0 || version.aiSummary?.length > 0
         );
-        const totalQuizzes = modQuizzes.length;
-        const completedQuizzesCount = modQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
+      });
 
-        // ✅ إذا مادخلش الأدمن حتى حاجة لسنة 2026-2027 فهاذ الموديول، ما نحسبوهش خالص
-        const hasAnyContent = totalLessons > 0 || totalQuizzes > 0;
+      // 3. QCMs من نوع module (امتحانات الوحدة)
+      const moduleQuizzes = allQuizzes.filter(q =>
+        q.moduleId?._id?.toString() === mod._id?.toString() &&
+        q.type === 'module'
+      );
 
-        const isComplete = hasAnyContent &&
-          readLessonsCount === totalLessons &&
-          completedQuizzesCount === totalQuizzes;
+      // 4. QCMs من نوع lesson (التابعة لهذه الوحدة)
+      const lessonQuizzes = allQuizzes.filter(q =>
+        q.lessonId && (q.lessonId._id || q.lessonId) &&
+        allLessons.some(l => l._id?.toString() === (q.lessonId._id || q.lessonId)?.toString() &&
+          l.moduleId?._id?.toString() === mod._id?.toString()
+        ) &&
+        q.type === 'lesson'
+      );
 
-        return {
-          ...mod,
-          totalLessons,
-          readLessonsCount,
-          totalQuizzes,
-          completedQuizzesCount,
-          hasAnyContent,
-          isComplete
-        };
-      })
-      .filter(m => m.hasAnyContent); // ✅ نحيدو الموديولات اللي والو مدخل ليهم لسنة 2026-2027
+      const totalAvailableLessons = availableLessons.length;
+      const readLessonsCount = availableLessons.filter(l => readLessonIds.includes(l._id?.toString())).length;
+
+      const totalModuleQuizzes = moduleQuizzes.length;
+      const completedModuleQuizzes = moduleQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
+
+      const totalLessonQuizzes = lessonQuizzes.length;
+      const completedLessonQuizzes = lessonQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
+
+      // ✅ تحديد حالة الإكمال:
+      // - إذا لم يكن هناك أي درس يحتوي على محتوى ولا أي QCM، تعتبر الوحدة مكتملة تلقائياً.
+      // - بخلاف ذلك، يجب قراءة جميع الدروس التي تحتوي على محتوى وإكمال جميع QCMs الموجودة.
+      const totalTasks = totalAvailableLessons + totalModuleQuizzes + totalLessonQuizzes;
+      const completedTasks = readLessonsCount + completedModuleQuizzes + completedLessonQuizzes;
+      const isComplete = (totalTasks === 0) || (completedTasks === totalTasks);
+
+      return {
+        ...mod,
+        hasLessonsForTargetYear: allTargetYearLessons.length > 0,
+        totalTasks,
+        completedTasks,
+        isComplete
+      };
+    });
   }, [modules, allLessons, allQuizzes, readLessonIds, completedQuizIds]);
-
-  const incompleteModules = moduleProgress.filter(m => !m.isComplete);
 
   const lessonStatus = useMemo(() => {
     return allLessons.map(lesson => ({
@@ -500,50 +483,31 @@ function StudentProfile() {
     }));
   }, [allQuizzes, completedQuizIds]);
 
-  const unreadLessons = lessonStatus.filter(l => !l.isRead);
-  const unresolvedQuizzes = quizStatus.filter(q => !q.isResolved && (q.type === 'lesson' || q.type === 'module'));
+  // ✅ دروس غير مقروءة (للسنة المستهدفة فقط)
+  const unreadLessons = useMemo(() => {
+    return lessonStatus.filter(l => {
+      const yearContent = (l.yearContents || []).find(yc => yc.year === TARGET_ACADEMIC_YEAR);
+      if (!yearContent) return false;
+      const hasContent = yearContent.versions.some(version =>
+        version.pdf?.length > 0 || version.video?.length > 0 || version.summary?.length > 0 ||
+        version.td?.length > 0 || version.correction?.length > 0 || version.other?.length > 0 ||
+        version.ai?.length > 0 || version.aiSummary?.length > 0
+      );
+      return !l.isRead && hasContent;
+    });
+  }, [lessonStatus]);
 
-  // ---------- Skeleton de chargement ----------
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 md:p-8">
-        <div className="max-w-5xl mx-auto space-y-6 animate-pulse">
-          <div className="bg-white dark:bg-slate-800 rounded-3xl p-6 md:p-8">
-            <div className="flex flex-col items-center">
-              <div className="w-20 h-20 rounded-full bg-slate-200 dark:bg-slate-700"></div>
-              <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-48 mt-4"></div>
-              <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-32 mt-2"></div>
-            </div>
-            <div className="flex flex-wrap justify-center gap-6 mt-6">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="h-8 bg-slate-200 dark:bg-slate-700 rounded-full w-32"></div>
-              ))}
-            </div>
-          </div>
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6">
-            <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-48 mb-4"></div>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="text-center">
-                  <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-16 mx-auto"></div>
-                  <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-12 mx-auto mt-1"></div>
-                </div>
-              ))}
-            </div>
-          </div>
-          <div className="bg-white dark:bg-slate-800 rounded-2xl p-6">
-            <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-32 mb-4"></div>
-            <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-6">
-              <div className="h-64 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
-              <div className="h-64 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // ✅ وحدات غير مكتملة: فقط التي تحتوي على دروس (حتى لو فارغة) أو QCMs للسنة المستهدفة ولم تكتمل بعد
+  const incompleteModules = useMemo(() => {
+    return moduleProgress.filter(m => m.hasLessonsForTargetYear && !m.isComplete);
+  }, [moduleProgress]);
 
-  // ---------- JSX ----------
+  // ✅ QCMs غير محلولة (جميع السنوات)
+  const unresolvedQuizzes = useMemo(() => {
+    return quizStatus.filter(q => !q.isResolved && (q.type === 'lesson' || q.type === 'module'));
+  }, [quizStatus]);
+
+  // ---------- JSX (تمت إزالة شاشة التحميل لتصبح الصفحة سريعة) ----------
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 md:p-8">
       <div className="max-w-5xl mx-auto space-y-6">
@@ -732,10 +696,10 @@ function StudentProfile() {
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Cours */}
+            {/* ✅ Cours - يظهر فقط الدروس التي تحتوي على محتوى فعلي للسنة 2026-2027 */}
             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
               <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
-                <BookOpen size={18} className="text-blue-600" /> Cours
+                <BookOpen size={18} className="text-blue-600" /> Cours ({TARGET_ACADEMIC_YEAR})
               </h4>
               <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Non lus ({unreadLessons.length}) :</p>
@@ -767,12 +731,12 @@ function StudentProfile() {
                     )}
                   </div>
                 ) : (
-                  <p className="text-xs text-green-600 mt-1">Tous les cours sont lus !</p>
+                  <p className="text-xs text-green-600 mt-1">Tous les cours de {TARGET_ACADEMIC_YEAR} sont lus !</p>
                 )}
               </div>
             </div>
 
-            {/* QCMs */}
+            {/* ✅ QCMs - تبقى لكل السنوات (مع تحسين العرض) */}
             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
               <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
                 <Zap size={18} className="text-yellow-600" /> QCMs
@@ -783,18 +747,23 @@ function StudentProfile() {
                   <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
                     {unresolvedQuizzes.slice(0, showAllQuizzes ? unresolvedQuizzes.length : 5).map((quiz) => {
                       const moduleName = getModuleNameFromQuiz(quiz);
-                      const lessonName = quiz.lessonId?.title || '';
                       return (
                         <div key={quiz._id} className="flex items-center justify-between text-sm p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                          <span className="text-slate-700 dark:text-slate-300 truncate">
-                            {moduleName} {lessonName && `(${lessonName})`}
+                          <span className="text-slate-700 dark:text-slate-300 truncate break-words whitespace-normal">
+                            {quiz.type === 'module' ? (
+                              <>{moduleName} ({quiz.year})</>
+                            ) : quiz.isIA ? (
+                              <>QCM IA{quiz.title ? ` - ${quiz.title}` : ''} ({moduleName})</>
+                            ) : (
+                              <>QCM Cours{quiz.title ? ` - ${quiz.title}` : ''} ({moduleName})</>
+                            )}
                           </span>
                           <button
                             onClick={() => {
                               if (quiz.type === 'lesson') navigate(`/quiz/lesson/${quiz._id}`);
                               else if (quiz.type === 'module') navigate(`/quiz/exam/${quiz._id}`);
                             }}
-                            className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                            className="text-xs text-blue-600 hover:underline flex items-center gap-1 flex-shrink-0"
                           >
                             Résoudre <ArrowRight size={12} />
                           </button>
@@ -818,44 +787,50 @@ function StudentProfile() {
               </div>
             </div>
 
-            {/* Modules */}
+            {/* ✅ Modules - يعتمد على الدروس + QCMs الموجودة فقط للسنة 2026-2027 */}
             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
               <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
-                <Award size={18} className="text-purple-600" /> Modules
+                <Award size={18} className="text-purple-600" /> Modules ({TARGET_ACADEMIC_YEAR})
               </h4>
               <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Non complétés ({incompleteModules.length}) :</p>
-                {incompleteModules.length > 0 ? (
-                  <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
-                    {incompleteModules.slice(0, showAllModules ? incompleteModules.length : 5).map((mod) => (
-                      <div key={mod._id} className="flex items-center justify-between text-sm p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-slate-700 dark:text-slate-300 truncate">{mod.title}</span>
-                          <span className={`flex-shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded ${mod.semester === 'Semestre 1' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' : 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'}`}>
-                            {mod.semester === 'Semestre 1' ? 'S1' : 'S2'}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => navigate(`/cours/module/${mod._id}`)}
-                          className="flex-shrink-0 text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded-lg transition flex items-center gap-1"
-                        >
-                          Aller étudier <ArrowRight size={12} />
-                        </button>
-                      </div>
-                    ))}
-                    {incompleteModules.length > 5 && !showAllModules && (
-                      <button onClick={() => setShowAllModules(!showAllModules)} className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
-                        Voir plus <ChevronDown size={14} />
-                      </button>
-                    )}
-                    {showAllModules && incompleteModules.length > 5 && (
-                      <button onClick={() => setShowAllModules(false)} className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
-                        voir moins <ChevronUp size={14} />
-                      </button>
-                    )}
-                  </div>
+                {incompleteModules.length === 0 ? (
+                  <p className="text-xs text-green-600 mt-1">Tous les modules de {TARGET_ACADEMIC_YEAR} sont complétés ! 🎉</p>
                 ) : (
-                  <p className="text-xs text-green-600 mt-1">Tous les modules sont complétés ! 🎉</p>
+                  <>
+                    {/* Groupement par semestre */}
+                    {['Semestre 1', 'Semestre 2'].map(sem => {
+                      const filtered = incompleteModules.filter(m => m.semester === sem);
+                      if (filtered.length === 0) return null;
+                      return (
+                        <div key={sem} className="mb-4 last:mb-0">
+                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">{sem}</p>
+                          <div className="space-y-2">
+                            {filtered.slice(0, showAllModules ? filtered.length : 5).map((mod) => (
+                              <div key={mod._id} className="flex items-center justify-between text-sm p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                                <span className="text-slate-700 dark:text-slate-300 truncate">{mod.title}</span>
+                                <button
+                                  onClick={() => navigate(`/cours/module/${mod._id}`)}
+                                  className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded-lg transition flex items-center gap-1"
+                                >
+                                  Aller étudier <ArrowRight size={12} />
+                                </button>
+                              </div>
+                            ))}
+                            {filtered.length > 5 && !showAllModules && (
+                              <button onClick={() => setShowAllModules(!showAllModules)} className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
+                                Voir plus <ChevronDown size={14} />
+                              </button>
+                            )}
+                            {showAllModules && filtered.length > 5 && (
+                              <button onClick={() => setShowAllModules(false)} className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
+                                Voir moins <ChevronUp size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
                 )}
               </div>
             </div>
