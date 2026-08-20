@@ -240,30 +240,11 @@ router.get('/profile/stats', async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// --- Mettre à jour l'état de l'abonnement (pour l'admin) ---
-router.put('/:userId', async (req, res) => {
-  try {
-    const { isSubscribed } = req.body;
-    const before = await User.findById(req.params.userId).select('isSubscribed');
-    if (!before) return res.status(404).json({ message: 'Utilisateur introuvable.' });
-    const user = await User.findByIdAndUpdate(req.params.userId, { isSubscribed }, { new: true }).select('-password');
-    if (!before.isSubscribed && isSubscribed) {
-      const io = req.app.get('io');
-      try {
-        await notifyUser(io, user._id, {
-          title: 'Abonnement activé',
-          body: 'Votre abonnement a été activé ✅',
-          conversationType: 'system',
-          conversationTitle: 'Abonnement activé'
-        });
-      } catch (notifyErr) { console.error('Erreur de notification :', notifyErr); }
-    }
-    res.json(user);
-  } catch (err) { res.status(500).json({ message: err.message }); }
-});
-
 // ============================================================
 // 🔹 NOUVEAUX ENDPOINTS POUR LES QUESTIONS (FAVORIS / NOTES)
+// ⚠️ Ces routes DOIVENT rester déclarées AVANT "PUT /:userId" plus bas,
+// sinon Express matche "/question-favorite" comme :userId="question-favorite"
+// et provoque un CastError ObjectId (c'était le bug des erreurs 500).
 // ============================================================
 
 // --- 9. Ajouter/Retirer un favori pour une question spécifique ---
@@ -419,6 +400,31 @@ router.get('/question-data', async (req, res) => {
     });
 
     res.json({ favoriteQuestions, questionNotes });
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// ⚠️ Cette route générique DOIT rester TOUT EN BAS du fichier (juste avant module.exports),
+// sinon elle "avale" toute route PUT plus spécifique définie au-dessus d'elle
+// (c'est exactement ce qui causait les erreurs 500 sur /question-favorite et /question-note).
+// --- Mettre à jour l'état de l'abonnement (pour l'admin) ---
+router.put('/:userId', async (req, res) => {
+  try {
+    const { isSubscribed } = req.body;
+    const before = await User.findById(req.params.userId).select('isSubscribed');
+    if (!before) return res.status(404).json({ message: 'Utilisateur introuvable.' });
+    const user = await User.findByIdAndUpdate(req.params.userId, { isSubscribed }, { new: true }).select('-password');
+    if (!before.isSubscribed && isSubscribed) {
+      const io = req.app.get('io');
+      try {
+        await notifyUser(io, user._id, {
+          title: 'Abonnement activé',
+          body: 'Votre abonnement a été activé ✅',
+          conversationType: 'system',
+          conversationTitle: 'Abonnement activé'
+        });
+      } catch (notifyErr) { console.error('Erreur de notification :', notifyErr); }
+    }
+    res.json(user);
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
