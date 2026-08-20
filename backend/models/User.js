@@ -25,7 +25,7 @@ const UserSchema = new mongoose.Schema({
   }],
   favoriteQuizzes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Quiz' }],
 
-  // --- Notes personnelles sur les QCMs ---
+  // --- Notes personnelles sur les QCMs (globales) ---
   quizNotes: [{
     quizId: { type: mongoose.Schema.Types.ObjectId, ref: 'Quiz' },
     noteText: { type: String, default: '' },
@@ -46,7 +46,7 @@ const UserSchema = new mongoose.Schema({
     type: { type: String }, // 'lesson', 'module' ou 'simulation'
     score: Number,          // en pourcentage (0-100)
     date: { type: Date, default: Date.now },
-    timeTaken: { type: Number, default: 0 } // ⬅️ AJOUT : temps en secondes
+    timeTaken: { type: Number, default: 0 }
   }],
 
   // --- Annotations et surlignages sur les PDF ---
@@ -55,12 +55,26 @@ const UserSchema = new mongoose.Schema({
     data: mongoose.Schema.Types.Mixed
   }],
 
-  // ✅ Nouveau: Fichiers personnalisés de l'étudiant (versions modifiées)
+  // --- Fichiers personnalisés de l'étudiant (versions modifiées) ---
   customFiles: [{
     fileUrl: { type: String, required: true },
     originalLessonId: { type: mongoose.Schema.Types.ObjectId, ref: 'Lesson' },
     year: { type: String },
     createdAt: { type: Date, default: Date.now }
+  }],
+
+  // ========== NOUVEAUX CHAMPS POUR LES QUESTIONS ==========
+  // --- Questions favorites (par QCM et index) ---
+  favoriteQuestions: [{
+    quizId: { type: mongoose.Schema.Types.ObjectId, ref: 'Quiz' },
+    questionIndex: { type: Number, required: true }
+  }],
+
+  // --- Notes sur des questions spécifiques ---
+  questionNotes: [{
+    quizId: { type: mongoose.Schema.Types.ObjectId, ref: 'Quiz' },
+    questionIndex: { type: Number, required: true },
+    noteText: { type: String, default: '' }
   }]
 
 }, { timestamps: true });
