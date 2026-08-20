@@ -397,6 +397,27 @@ function StudentProfile() {
     return 'Module inconnu';
   };
 
+  // ✅ Normalise un id qui peut être soit une string, soit un objet peuplé ({_id, ...}), soit null/undefined.
+  // C'est ce qui manquait : le backend ne renvoie pas toujours moduleId comme objet peuplé,
+  // donc comparer directement lesson.moduleId?._id échouait silencieusement quand moduleId était déjà une string.
+  const getIdStr = (val) => {
+    if (val === null || val === undefined) return null;
+    if (typeof val === 'object') return (val._id ?? val.id ?? val).toString();
+    return val.toString();
+  };
+
+  // ✅ Récupère le nom du module d'une leçon, que lesson.moduleId soit peuplé ou juste un id (même logique que StudentProgress.js)
+  const getModuleNameFromLesson = (lesson) => {
+    if (!lesson) return '';
+    if (lesson.moduleId && typeof lesson.moduleId === 'object' && lesson.moduleId.title) {
+      return lesson.moduleId.title;
+    }
+    const moduleId = getIdStr(lesson.moduleId);
+    if (!moduleId) return '';
+    const module = modules.find(m => getIdStr(m._id) === moduleId);
+    return module?.title || '';
+  };
+
   // ---------- حساب الحالات باستخدام useMemo ----------
   const readLessonIds = useMemo(() => {
     return stats.readLessons.map(r => r.lessonId?._id?.toString() || r.lessonId?.toString()).filter(Boolean);
@@ -412,8 +433,10 @@ function StudentProfile() {
 
     return modules.map(mod => {
       // 1. جميع دروس الوحدة التي لها سنة مستهدفة (حتى لو فارغة)
+      // ✅ نستعمل getIdStr لأن lesson.moduleId قد يكون string بسيط أو object مُعبّأ — المقارنة المباشرة كانت تفشل بصمت
+      const modIdStr = getIdStr(mod._id);
       const allTargetYearLessons = allLessons.filter(l =>
-        l.moduleId?._id?.toString() === mod._id?.toString() &&
+        getIdStr(l.moduleId) === modIdStr &&
         (l.yearContents || []).some(yc => yc.year === TARGET_ACADEMIC_YEAR)
       );
 
@@ -684,20 +707,24 @@ function StudentProfile() {
                 <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Non lus ({unreadLessons.length}) :</p>
                 {unreadLessons.length > 0 ? (
                   <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
-                    {unreadLessons.slice(0, showAllLessons ? unreadLessons.length : 5).map((lesson) => (
-                      <div key={lesson._id} className="flex items-center justify-between text-sm p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                        <span className="text-slate-700 dark:text-slate-300 truncate">
-                          {lesson.title || 'Cours sans titre'}
-                          {lesson.moduleId?.title && <span className="text-xs text-blue-600 ml-1">({lesson.moduleId.title})</span>}
-                        </span>
-                        <button
-                          onClick={() => navigate(`/cours/module/${lesson.moduleId?._id || lesson.moduleId}`)}
-                          className="text-xs text-blue-600 hover:underline flex items-center gap-1"
-                        >
-                          Aller étudier <ArrowRight size={12} />
-                        </button>
-                      </div>
-                    ))}
+                    {unreadLessons.slice(0, showAllLessons ? unreadLessons.length : 5).map((lesson) => {
+                      const moduleName = getModuleNameFromLesson(lesson);
+                      const moduleId = getIdStr(lesson.moduleId);
+                      return (
+                        <div key={lesson._id} className="flex items-center justify-between text-sm p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                          <span className="text-slate-700 dark:text-slate-300 truncate">
+                            {lesson.title || 'Cours sans titre'}
+                            {moduleName && <span className="text-xs text-blue-600 ml-1">({moduleName})</span>}
+                          </span>
+                          <button
+                            onClick={() => navigate(`/cours/module/${moduleId}`)}
+                            className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                          >
+                            Aller étudier <ArrowRight size={12} />
+                          </button>
+                        </div>
+                      );
+                    })}
                     {unreadLessons.length > 5 && !showAllLessons && (
                       <button onClick={() => setShowAllLessons(!showAllLessons)} className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
                         Voir plus <ChevronDown size={14} />
