@@ -397,6 +397,21 @@ function StudentProfile() {
     return 'Module inconnu';
   };
 
+  // ✅ Retourne l'id du module d'un quiz (même logique que getModuleNameFromQuiz, mais renvoie un id stable pour le groupement)
+  const getModuleIdFromQuiz = (quiz) => {
+    if (!quiz) return null;
+    if (quiz.moduleId) {
+      const id = getIdStr(quiz.moduleId);
+      if (id) return id;
+    }
+    if (quiz.lessonId) {
+      const lessonId = getIdStr(quiz.lessonId);
+      const lesson = allLessons.find(l => getIdStr(l._id) === lessonId);
+      if (lesson?.moduleId) return getIdStr(lesson.moduleId);
+    }
+    return null;
+  };
+
   // ✅ Normalise un id qui peut être soit une string, soit un objet peuplé ({_id, ...}), soit null/undefined.
   // C'est ce qui manquait : le backend ne renvoie pas toujours moduleId comme objet peuplé,
   // donc comparer directement lesson.moduleId?._id échouait silencieusement quand moduleId était déjà une string.
@@ -641,10 +656,10 @@ function StudentProfile() {
             (() => {
               const groups = {};
               stats.favoriteQuizzes.forEach((q) => {
-                const courseTitle = q.lessonId?.title || q.moduleId?.title || 'Cours inconnu';
-                const key = q.lessonId?._id || q.moduleId?._id || courseTitle;
-                if (!groups[key]) groups[key] = { title: courseTitle, quizzes: [] };
-                groups[key].quizzes.push(q);
+                const moduleName = getModuleNameFromQuiz(q);
+                const moduleKey = getModuleIdFromQuiz(q) || moduleName;
+                if (!groups[moduleKey]) groups[moduleKey] = { title: moduleName, quizzes: [] };
+                groups[moduleKey].quizzes.push(q);
               });
               return (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -652,12 +667,26 @@ function StudentProfile() {
                     <div key={gIdx} className="bg-red-50 dark:bg-slate-800 rounded-xl shadow border border-red-100 dark:border-slate-700 p-4">
                       <h4 className="font-bold text-lg text-slate-800 dark:text-white mb-3">{group.title}</h4>
                       <div className="space-y-2">
-                        {group.quizzes.map((q) => (
-                          <div key={q._id} className="flex items-center justify-between bg-white dark:bg-slate-900/50 p-3 rounded-lg border border-red-100 dark:border-slate-700">
-                            <div><p className="text-sm font-medium text-slate-700 dark:text-slate-200">{q.type === 'lesson' ? 'QCM Par cours' : q.type === 'simulation' ? 'Simulation' : 'Examen'}</p><p className="text-xs text-slate-400">{q.questions?.length || 0} questions</p></div>
-                            <button onClick={() => navigate(`/quiz/lesson/${q._id}?mode=correction`)} className="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg shadow transition">Voir les réponses →</button>
-                          </div>
-                        ))}
+                        {group.quizzes.map((q) => {
+                          const label = q.type === 'module'
+                            ? `Examen${q.year ? ` (${q.year})` : ''}`
+                            : q.type === 'simulation'
+                              ? 'Simulation'
+                              : q.isIA
+                                ? `QCM IA${q.title ? ` - ${q.title}` : ''}`
+                                : `QCM Cours${q.title ? ` - ${q.title}` : ''}`;
+                          return (
+                            <div key={q._id} className="flex items-center justify-between bg-white dark:bg-slate-900/50 p-3 rounded-lg border border-red-100 dark:border-slate-700">
+                              <div><p className="text-sm font-medium text-slate-700 dark:text-slate-200 break-words whitespace-normal">{label}</p><p className="text-xs text-slate-400">{q.questions?.length || 0} questions</p></div>
+                              <button
+                                onClick={() => navigate(q.type === 'module' ? `/quiz/exam/${q._id}` : `/quiz/lesson/${q._id}`)}
+                                className="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg shadow transition flex-shrink-0"
+                              >
+                                Aller au QCM →
+                              </button>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   ))}
