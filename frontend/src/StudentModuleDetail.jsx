@@ -486,7 +486,7 @@ function StudentModuleDetail() {
                       <div>
                         <p className="font-medium text-slate-800 dark:text-white">
                           {qcm.title || 'QCM Normal'}
-                          {qcm.lessonId && <span className="text-xs text-blue-600 ml-1">({qcm.lessonId.title})</span>}
+                          
                         </p>
                         <p className="text-xs text-slate-500">{qcm.questions?.length || 0} questions · {qcm.durationMinutes} min</p>
                       </div>
