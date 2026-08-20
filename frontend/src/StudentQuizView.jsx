@@ -1,6 +1,7 @@
+// StudentQuizView.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
-import { Clock, CheckCircle, XCircle, ArrowLeft, ArrowRight, Save, X, FileText, Trophy, Heart, MessageCircle, Maximize2, Minimize2 } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, ArrowLeft, ArrowRight, Save, X, FileText, Trophy, Heart, MessageCircle, Maximize2, Minimize2, Trash2, Pencil } from 'lucide-react';
 import ChatWindow from './ChatWindow';
 
 function StudentQuizView() {
@@ -13,7 +14,6 @@ function StudentQuizView() {
   const moduleIdFromState = location.state?.moduleId;
   const user = JSON.parse(localStorage.getItem('user'));
 
-  // États principaux
   const [quiz, setQuiz] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
@@ -32,20 +32,21 @@ function StudentQuizView() {
   const [showChat, setShowChat] = useState(false);
   const [chatConversationId, setChatConversationId] = useState(null);
   const [chatTitle, setChatTitle] = useState('');
-  const [lastTimeTaken, setLastTimeTaken] = useState(0);
 
-  const [isNoteModalOpen, setIsNoteModalOpen] = useState(false);
-  const [noteText, setNoteText] = useState('');
+  // --- Per-question states ---
+  const [favoriteQuestions, setFavoriteQuestions] = useState({}); // key: questionIndex, value: boolean
+  const [questionNotes, setQuestionNotes] = useState({}); // key: questionIndex, value: note text
+  const [activeQuestionNoteIndex, setActiveQuestionNoteIndex] = useState(null);
+  const [questionNoteText, setQuestionNoteText] = useState('');
   const [savingNote, setSavingNote] = useState(false);
+  const [noteModalOpen, setNoteModalOpen] = useState(false);
+
   const [rankingData, setRankingData] = useState(null);
   const [isRankingModalOpen, setIsRankingModalOpen] = useState(false);
-  const [isFavorite, setIsFavorite] = useState(false);
-  const [togglingFavorite, setTogglingFavorite] = useState(false);
 
-  // États pour l'agrandissement des images
-  const [zoomedImage, setZoomedImage] = useState(null); // url de l'image agrandie
+  const [zoomedImage, setZoomedImage] = useState(null);
 
-  // Chargement du quiz
+  // --- Load quiz and per-question data ---
   useEffect(() => {
     const fetchQuiz = async () => {
       try {
@@ -71,18 +72,17 @@ function StudentQuizView() {
             setLastTimeTaken(last.timeTaken || 0);
           }
         }
-        const alreadyFavorite = statsData.favoriteQuizzes?.some(
-          q => String(q._id || q) === String(quizId)
-        );
-        setIsFavorite(!!alreadyFavorite);
-
-        const savedNote = statsData.quizNotes?.find(n => n.quizId === quizId);
-        if (savedNote) setNoteText(savedNote.noteText);
+        // Load per-question favorites and notes
+        const questionDataRes = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/users/question-data?userId=${user?._id}&quizId=${quizId}`);
+        if (questionDataRes.ok) {
+          const questionData = await questionDataRes.json();
+          setFavoriteQuestions(questionData.favoriteQuestions || {});
+          setQuestionNotes(questionData.questionNotes || {});
+        }
 
         if (!isReviewMode && !isCorrectionOnly) {
           setStartTime(Date.now());
         }
-
       } catch (err) {
         console.error(err);
         setQuiz({
@@ -101,7 +101,7 @@ function StudentQuizView() {
     fetchQuiz();
   }, [quizId, user?._id]);
 
-  // Gestion du timer
+  // Timer
   useEffect(() => {
     if (timeLeft === 0 || isFinished || isReviewMode) return;
     const timer = setInterval(() => {
@@ -117,9 +117,99 @@ function StudentQuizView() {
     return () => clearInterval(timer);
   }, [timeLeft, isFinished, isReviewMode]);
 
+  // --- Per-question favorite toggle ---
+  const toggleFavoriteQuestion = async (index) => {
+    if (!user) return;
+    const newFav = !favoriteQuestions[index];
+    setFavoriteQuestions(prev => ({ ...prev, [index]: newFav }));
+    try {
+      await fetch('https://reussite-qcmss-1nc7.onrender.com/api/users/question-favorite', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user._id, quizId, questionIndex: index, favorite: newFav })
+      });
+    } catch (err) {
+      console.error(err);
+      setFavoriteQuestions(prev => ({ ...prev, [index]: !newFav })); // revert
+    }
+  };
+
+  // --- Per-question note ---
+  const openQuestionNote = (index) => {
+    setActiveQuestionNoteIndex(index);
+    setQuestionNoteText(questionNotes[index] || '');
+    setNoteModalOpen(true);
+  };
+
+  const saveQuestionNote = async () => {
+    if (activeQuestionNoteIndex === null) return;
+    setSavingNote(true);
+    try {
+      const res = await fetch('https://reussite-qcmss-1nc7.onrender.com/api/users/question-note', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: user._id, quizId, questionIndex: activeQuestionNoteIndex, noteText: questionNoteText })
+      });
+      if (res.ok) {
+        const updated = { ...questionNotes, [activeQuestionNoteIndex]: questionNoteText };
+        setQuestionNotes(updated);
+        alert('📝 Note sauvegardée avec succès !');
+      } else {
+        const errData = await res.json();
+        alert(`Erreur: ${errData.message}`);
+      }
+    } catch (err) {
+      alert('Erreur réseau.');
+    } finally {
+      setSavingNote(false);
+      setNoteModalOpen(false);
+      setActiveQuestionNoteIndex(null);
+    }
+  };
+
+  const deleteQuestionNote = async () => {
+    if (activeQuestionNoteIndex === null) return;
+    if (!window.confirm("Voulez-vous vraiment supprimer cette note ?")) return;
+    try {
+      const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/users/question-note?userId=${user._id}&quizId=${quizId}&questionIndex=${activeQuestionNoteIndex}`, {
+        method: 'DELETE'
+      });
+      if (res.ok) {
+        const updated = { ...questionNotes };
+        delete updated[activeQuestionNoteIndex];
+        setQuestionNotes(updated);
+        alert('Note supprimée.');
+      } else {
+        alert('Erreur lors de la suppression.');
+      }
+    } catch (err) {
+      alert('Erreur réseau.');
+    } finally {
+      setNoteModalOpen(false);
+      setActiveQuestionNoteIndex(null);
+    }
+  };
+
+  // --- Chat per question (if needed) ---
+  const openQuestionChat = async (index) => {
+    // Create a conversation for this specific question? 
+    // For simplicity, we can reuse the quiz chat or create a new one.
+    // But for now, we'll use the existing quiz chat.
+    try {
+      const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/community/conversations/quiz/${quizId}?userId=${user._id}`);
+      const conv = await res.json();
+      setChatConversationId(conv._id);
+      setChatTitle(`Discussion - Question ${index+1}`);
+      setShowChat(true);
+    } catch (err) {
+      console.error(err);
+      alert("Erreur lors de l'ouverture du chat.");
+    }
+  };
+
+  // --- Finish and score ---
   const handleFinish = async () => {
     if (isReviewMode) return;
-
     let correctCount = 0;
     quiz.questions.forEach((q, idx) => {
       if (q.correctAnswer && selectedAnswers[idx] === q.correctAnswer) correctCount++;
@@ -155,7 +245,7 @@ function StudentQuizView() {
     setIsFirstAttempt(false);
   };
 
-  // Fonctions de gestion des réponses
+  // --- Answer handling ---
   const handleAnswer = (option) => {
     if (isFinished || isReviewMode) return;
     setSelectedAnswers(prev => ({ ...prev, [currentQuestionIndex]: option }));
@@ -197,70 +287,6 @@ function StudentQuizView() {
     }
   };
 
-  const openChat = async () => {
-    try {
-      const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/community/conversations/quiz/${quizId}?userId=${user._id}`);
-      const conv = await res.json();
-      setChatConversationId(conv._id);
-      setChatTitle(conv.title || `Discussion QCM`);
-      setShowChat(true);
-    } catch (err) {
-      console.error(err);
-      alert("Erreur lors de l'ouverture du chat.");
-    }
-  };
-
-  const handleSaveNote = async () => {
-    setSavingNote(true);
-    try {
-      await fetch('https://reussite-qcmss-1nc7.onrender.com/api/users/quiz-note', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user._id,
-          quizId,
-          noteText,
-          moduleId: quiz.moduleId,
-          type: quiz.type
-        })
-      });
-      alert('📝 Note sauvegardée avec succès !');
-    } catch (e) {
-      alert('Erreur lors de la sauvegarde de la note.');
-    }
-    setSavingNote(false);
-  };
-
-  const fetchRanking = async () => {
-    try {
-      const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/quizzes/${quizId}/ranking`);
-      const data = await res.json();
-      setRankingData(data);
-      setIsRankingModalOpen(true);
-    } catch (err) {
-      console.error(err);
-      alert('Erreur lors du chargement du classement.');
-    }
-  };
-
-  const toggleQuizFavorite = async () => {
-    if (!user) return;
-    setTogglingFavorite(true);
-    try {
-      await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/users/favorite-quiz/${quizId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user._id })
-      });
-      setIsFavorite(prev => !prev);
-    } catch (err) {
-      console.error(err);
-      alert("Erreur lors de la mise à jour du favori.");
-    } finally {
-      setTogglingFavorite(false);
-    }
-  };
-
   const handleExit = () => {
     if (isCorrectionOnly) { navigate('/profile'); return; }
     if (!isFinished && !isReviewMode && !window.confirm("Voulez-vous vraiment quitter l'examen ?")) return;
@@ -285,19 +311,26 @@ function StudentQuizView() {
     setIsFirstAttempt(true);
   };
 
-  if (loading) return <div className="p-10 text-center text-slate-500">Chargement de l'examen...</div>;
-  if (!quiz) return <div className="p-10 text-center text-red-500">Erreur lors du chargement.</div>;
+  // --- Ranking ---
+  const fetchRanking = async () => {
+    try {
+      const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/quizzes/${quizId}/ranking`);
+      const data = await res.json();
+      setRankingData(data);
+      setIsRankingModalOpen(true);
+    } catch (err) {
+      console.error(err);
+      alert('Erreur lors du chargement du classement.');
+    }
+  };
 
-  const totalQuestions = quiz.questions.length;
+  // --- Helpers ---
   const formatTime = (seconds) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  const effectiveCorrectionMode = (quiz.type !== 'lesson' && isPracticeMode) ? 'immediate' : quiz.correctionMode;
-
-  // Composant d'affichage des images avec zoom
   const ImageGallery = ({ images, alt }) => {
     if (!images || images.length === 0) return null;
     return (
@@ -323,11 +356,17 @@ function StudentQuizView() {
     );
   };
 
+  if (loading) return <div className="p-10 text-center text-slate-500">Chargement de l'examen...</div>;
+  if (!quiz) return <div className="p-10 text-center text-red-500">Erreur lors du chargement.</div>;
+
+  const totalQuestions = quiz.questions.length;
+  const effectiveCorrectionMode = (quiz.type !== 'lesson' && isPracticeMode) ? 'immediate' : quiz.correctionMode;
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-3 sm:p-6 flex items-center justify-center">
       <div className="w-full max-w-4xl bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-4 sm:p-6 border border-slate-200 dark:border-slate-700 relative">
 
-        {/* --- Header --- */}
+        {/* --- Header (simplified) --- */}
         <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-100 dark:border-slate-700 flex-wrap gap-2">
           <div>
             <h2 className="text-xl font-bold text-slate-800 dark:text-white">
@@ -350,31 +389,13 @@ function StudentQuizView() {
                 {isPracticeMode ? 'Mode Entraînement' : 'Mode Examen'}
               </button>
             )}
-
-            <button onClick={openChat} className="p-2 rounded-full bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-900/50 transition" title="Discuter de ce QCM">
-              <MessageCircle size={18} />
-            </button>
-
-            {/* ✅ زر المفضلة يعمل الآن لكل من QCM par cours (lesson) و Examen par année (module) */}
-            {(quiz.type === 'lesson' || quiz.type === 'module') && (
-              <button onClick={toggleQuizFavorite} disabled={togglingFavorite} className={`p-2 rounded-full transition ${isFavorite ? 'bg-red-100 text-red-500 dark:bg-red-900/30' : 'bg-slate-100 text-slate-400 dark:bg-slate-700 hover:text-red-400'}`} title="Ajouter / Retirer des favoris">
-                <Heart size={18} fill={isFavorite ? "currentColor" : "none"} />
-              </button>
-            )}
-
-            {!isCorrectionOnly && (
-              <button onClick={() => setIsNoteModalOpen(true)} className="flex items-center gap-2 px-3 py-2 bg-blue-50 dark:bg-slate-700 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-100 dark:hover:bg-slate-600 transition font-medium text-sm">
-                <FileText size={16} /> Note
-              </button>
-            )}
-
             <button onClick={handleExit} className="p-2 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 rounded-full hover:bg-red-200 dark:hover:bg-red-900/50 transition" title="Quitter l'examen">
               <X size={20} />
             </button>
           </div>
         </div>
 
-        {/* --- Contenu principal --- */}
+        {/* --- Content --- */}
         {!isFinished && !isReviewMode ? (
           <div>
             <div className="flex-1">
@@ -389,6 +410,31 @@ function StudentQuizView() {
               <h3 className="text-lg font-medium text-slate-800 dark:text-white mb-4">
                 {quiz.questions[currentQuestionIndex].questionText}
               </h3>
+
+              {/* Per-question action buttons */}
+              <div className="flex items-center gap-2 mb-4">
+                <button
+                  onClick={() => toggleFavoriteQuestion(currentQuestionIndex)}
+                  className="p-2 rounded-full transition hover:bg-gray-100 dark:hover:bg-slate-700"
+                  title="Ajouter aux favoris"
+                >
+                  <Heart size={20} fill={favoriteQuestions[currentQuestionIndex] ? 'red' : 'none'} className={favoriteQuestions[currentQuestionIndex] ? 'text-red-500' : 'text-slate-400'} />
+                </button>
+                <button
+                  onClick={() => openQuestionNote(currentQuestionIndex)}
+                  className="p-2 rounded-full transition hover:bg-gray-100 dark:hover:bg-slate-700"
+                  title="Ajouter une note"
+                >
+                  <FileText size={20} className="text-slate-400" />
+                </button>
+                <button
+                  onClick={() => openQuestionChat(currentQuestionIndex)}
+                  className="p-2 rounded-full transition hover:bg-gray-100 dark:hover:bg-slate-700"
+                  title="Discuter de cette question"
+                >
+                  <MessageCircle size={20} className="text-slate-400" />
+                </button>
+              </div>
 
               <ImageGallery
                 images={quiz.questions[currentQuestionIndex].questionImages}
@@ -493,7 +539,7 @@ function StudentQuizView() {
             </div>
           </div>
         ) : (
-          // --- Écran de fin / correction ---
+          // --- Correction / Finish screen ---
           <div className="text-center py-6">
             <h2 className="text-3xl font-bold text-slate-800 dark:text-white mb-2">
               {isCorrectionOnly ? 'Correction du QCM (Favori)' : isReviewMode ? 'Révision - Examen terminé !' : 'Examen terminé !'}
@@ -602,26 +648,24 @@ function StudentQuizView() {
           </div>
         )}
 
-        {/* --- Modales Note, Ranking, Chat --- */}
-        {isNoteModalOpen && (
+        {/* --- Modales --- */}
+        {/* Note modal per question */}
+        {noteModalOpen && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col">
               <div className="bg-slate-100 dark:bg-slate-700 px-4 py-2 border-b border-slate-200 dark:border-slate-600 flex items-center justify-between">
-                <div className="flex items-center gap-4 text-xs font-medium text-slate-600 dark:text-slate-300">
-                  <span className="hover:bg-slate-200 dark:hover:bg-slate-600 px-2 py-1 rounded cursor-default">Fichier</span>
-                  <span className="hover:bg-slate-200 dark:hover:bg-slate-600 px-2 py-1 rounded cursor-default">Edition</span>
-                  <span className="hover:bg-slate-200 dark:hover:bg-slate-600 px-2 py-1 rounded cursor-default">Format</span>
-                  <span className="hover:bg-slate-200 dark:hover:bg-slate-600 px-2 py-1 rounded cursor-default">Affichage</span>
-                  <span className="hover:bg-slate-200 dark:hover:bg-slate-600 px-2 py-1 rounded cursor-default">Aide</span>
+                <div className="text-sm font-medium text-slate-800 dark:text-white">
+                  Note pour la question {activeQuestionNoteIndex !== null ? activeQuestionNoteIndex + 1 : ''}
                 </div>
-                <button onClick={() => setIsNoteModalOpen(false)} className="text-slate-500 hover:text-red-500"><X size={18} /></button>
+                <button onClick={() => setNoteModalOpen(false)} className="text-slate-500 hover:text-red-500"><X size={18} /></button>
               </div>
               <div className="p-4 flex-1 bg-white dark:bg-slate-800">
-                <textarea className="w-full h-64 md:h-96 bg-transparent border-none resize-none text-base text-slate-800 dark:text-slate-200 focus:ring-0 font-mono leading-relaxed" placeholder="Écrivez vos notes..." value={noteText} onChange={(e) => setNoteText(e.target.value)} />
+                <textarea className="w-full h-64 md:h-96 bg-transparent border-none resize-none text-base text-slate-800 dark:text-slate-200 focus:ring-0 font-mono leading-relaxed" placeholder="Écrivez vos notes..." value={questionNoteText} onChange={(e) => setQuestionNoteText(e.target.value)} />
               </div>
               <div className="bg-slate-100 dark:bg-slate-700 px-4 py-3 border-t border-slate-200 dark:border-slate-600 flex justify-end gap-3">
-                <button onClick={() => setIsNoteModalOpen(false)} className="px-4 py-2 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 transition font-medium">Annuler</button>
-                <button onClick={handleSaveNote} disabled={savingNote} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow transition font-medium flex items-center gap-2">
+                <button onClick={() => setNoteModalOpen(false)} className="px-4 py-2 bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-300 transition font-medium">Annuler</button>
+                <button onClick={deleteQuestionNote} className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg shadow font-medium">Supprimer</button>
+                <button onClick={saveQuestionNote} disabled={savingNote} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow transition font-medium flex items-center gap-2">
                   <Save size={16} /> {savingNote ? 'Enregistrement...' : 'Enregistrer la note'}
                 </button>
               </div>
@@ -629,6 +673,7 @@ function StudentQuizView() {
           </div>
         )}
 
+        {/* Ranking modal (unchanged) */}
         {isRankingModalOpen && rankingData && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-3xl w-full p-6 max-h-[80vh] overflow-y-auto">
@@ -681,7 +726,6 @@ function StudentQuizView() {
           />
         )}
 
-        {/* ✅ Modal d'agrandissement d'image */}
         {zoomedImage && (
           <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={() => setZoomedImage(null)}>
             <div className="relative max-w-4xl max-h-[90vh] flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
@@ -702,7 +746,6 @@ function StudentQuizView() {
             </div>
           </div>
         )}
-
       </div>
     </div>
   );
