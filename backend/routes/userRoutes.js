@@ -3,6 +3,7 @@ const router = express.Router();
 const User = require('../models/User');
 const Module = require('../models/Module');
 const Lesson = require('../models/Lesson');
+const Quiz = require('../models/Quiz'); // لإحضار تفاصيل الامتحان
 const { notifyUser } = require('../utils/notify');
 
 // --- Récupérer tous les étudiants (pour l'admin) ---
@@ -73,7 +74,7 @@ router.put('/favorite/:lessonId', async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// --- 2bis. Ajouter/Retirer un QCM des favoris ---
+// --- 2bis. Ajouter/Retirer un QCM des favoris (ancien, pour compatibilité) ---
 router.put('/favorite-quiz/:quizId', async (req, res) => {
   try {
     const { userId } = req.body;
@@ -87,7 +88,7 @@ router.put('/favorite-quiz/:quizId', async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// --- 3. Enregistrer une note ---
+// --- 3. Enregistrer une note (ancien, pour compatibilité) ---
 router.put('/quiz-note', async (req, res) => {
   try {
     const { userId, quizId, noteText, moduleId, type } = req.body;
@@ -153,7 +154,7 @@ router.get('/annotation', async (req, res) => {
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
-// --- 6. ✅ Enregistrer un fichier personnalisé (version modifiée par l'étudiant) ---
+// --- 6. Enregistrer un fichier personnalisé (version modifiée par l'étudiant) ---
 router.put('/custom-file', async (req, res) => {
   try {
     const { userId, fileUrl, lessonId, year } = req.body;
@@ -187,7 +188,7 @@ router.put('/quiz-result', async (req, res) => {
   }
 });
 
-// --- 8. Profil + Statistiques réelles ---
+// --- 8. Profil + Statistiques réelles (incluant les nouveaux champs) ---
 router.get('/profile/stats', async (req, res) => {
   try {
     const { userId } = req.query;
@@ -197,8 +198,10 @@ router.get('/profile/stats', async (req, res) => {
       .populate('readLessons.lessonId')
       .populate('favoriteLessons')
       .populate('favoriteQuizzes')
-      .populate('completedQuizzes.quizId');
-      
+      .populate('completedQuizzes.quizId')
+      .populate('favoriteQuestions.quizId') // peuplé pour les questions favorites
+      .populate('questionNotes.quizId');   // peuplé pour les notes questions
+
     if (!user) return res.status(404).json({ message: 'Utilisateur introuvable.' });
 
     const modules = await Module.find({ year: user.year });
@@ -223,13 +226,16 @@ router.get('/profile/stats', async (req, res) => {
       averageScore, 
       lessonsRead, 
       totalLessons, 
-      quizNotes: user.quizNotes,
+      quizNotes: user.quizNotes,             // notes globales (ancien)
       favoriteLessons: user.favoriteLessons, 
-      favoriteQuizzes: user.favoriteQuizzes, 
+      favoriteQuizzes: user.favoriteQuizzes, // favoris globaux (ancien)
       todoList: user.todoList,
       completedQuizzes: user.completedQuizzes,
       readLessons: user.readLessons,
-      customFiles: user.customFiles
+      customFiles: user.customFiles,
+      // 🔹 Nouveaux champs pour les questions
+      favoriteQuestions: user.favoriteQuestions,
+      questionNotes: user.questionNotes
     });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
@@ -253,6 +259,157 @@ router.put('/:userId', async (req, res) => {
       } catch (notifyErr) { console.error('Erreur de notification :', notifyErr); }
     }
     res.json(user);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// ============================================================
+// 🔹 NOUVEAUX ENDPOINTS POUR LES QUESTIONS (FAVORIS / NOTES)
+// ============================================================
+
+// --- 9. Ajouter/Retirer un favori pour une question spécifique ---
+router.put('/question-favorite', async (req, res) => {
+  try {
+    const { userId, quizId, questionIndex, favorite } = req.body;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: 'Utilisateur introuvable' });
+
+    // Vérifier si l'entrée existe déjà
+    const existingIndex = user.favoriteQuestions.findIndex(
+      f => f.quizId.toString() === quizId && f.questionIndex === questionIndex
+    );
+
+    if (favorite && existingIndex === -1) {
+      // Ajouter
+      user.favoriteQuestions.push({ quizId, questionIndex });
+    } else if (!favorite && existingIndex !== -1) {
+      // Retirer
+      user.favoriteQuestions.splice(existingIndex, 1);
+    }
+
+    await user.save();
+    res.json(user.favoriteQuestions);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// --- 10. Enregistrer une note pour une question spécifique ---
+router.put('/question-note', async (req, res) => {
+  try {
+    const { userId, quizId, questionIndex, noteText } = req.body;
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: 'Utilisateur introuvable' });
+
+    const existing = user.questionNotes.find(
+      n => n.quizId.toString() === quizId && n.questionIndex === questionIndex
+    );
+    if (existing) {
+      existing.noteText = noteText;
+    } else {
+      user.questionNotes.push({ quizId, questionIndex, noteText });
+    }
+    await user.save();
+    res.json(user.questionNotes);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// --- 11. Supprimer une note d'une question ---
+router.delete('/question-note', async (req, res) => {
+  try {
+    const { userId, quizId, questionIndex } = req.query;
+    if (!userId) return res.status(400).json({ message: 'Identifiant utilisateur manquant.' });
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: 'Utilisateur introuvable' });
+
+    user.questionNotes = user.questionNotes.filter(
+      n => !(n.quizId.toString() === quizId && n.questionIndex === parseInt(questionIndex))
+    );
+    await user.save();
+    res.json(user.questionNotes);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// --- 12. Récupérer toutes les questions favorites avec leurs détails (pour l'affichage dans le profil) ---
+router.get('/favorite-questions', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ message: 'Identifiant utilisateur manquant.' });
+
+    const user = await User.findById(userId).populate('favoriteQuestions.quizId');
+    if (!user) return res.status(404).json({ message: 'Utilisateur introuvable' });
+
+    const result = [];
+    for (const fav of user.favoriteQuestions) {
+      const quiz = await Quiz.findById(fav.quizId).populate('moduleId');
+      if (quiz && fav.questionIndex < quiz.questions.length) {
+        result.push({
+          quizId: quiz._id,
+          moduleTitle: quiz.moduleId?.title || 'Module inconnu',
+          year: quiz.year,
+          title: quiz.title,
+          isIA: quiz.isIA,
+          type: quiz.type,
+          questionIndex: fav.questionIndex,
+          question: quiz.questions[fav.questionIndex]
+        });
+      }
+    }
+    res.json(result);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// --- 13. Récupérer toutes les notes de questions (pour l'affichage dans le profil) ---
+router.get('/question-notes', async (req, res) => {
+  try {
+    const { userId } = req.query;
+    if (!userId) return res.status(400).json({ message: 'Identifiant utilisateur manquant.' });
+
+    const user = await User.findById(userId).populate('questionNotes.quizId');
+    if (!user) return res.status(404).json({ message: 'Utilisateur introuvable' });
+
+    const result = [];
+    for (const note of user.questionNotes) {
+      const quiz = await Quiz.findById(note.quizId).populate('moduleId');
+      if (quiz && note.questionIndex < quiz.questions.length) {
+        result.push({
+          quizId: quiz._id,
+          moduleTitle: quiz.moduleId?.title || 'Module inconnu',
+          year: quiz.year,
+          title: quiz.title,
+          isIA: quiz.isIA,
+          type: quiz.type,
+          questionIndex: note.questionIndex,
+          question: quiz.questions[note.questionIndex],
+          noteText: note.noteText
+        });
+      }
+    }
+    res.json(result);
+  } catch (err) { res.status(500).json({ message: err.message }); }
+});
+
+// --- 14. (Optionnel) Récupérer les données d'une question (favoris + notes) pour un quiz donné ---
+router.get('/question-data', async (req, res) => {
+  try {
+    const { userId, quizId } = req.query;
+    if (!userId || !quizId) return res.status(400).json({ message: 'Paramètres manquants.' });
+
+    const user = await User.findById(userId);
+    if (!user) return res.status(404).json({ message: 'Utilisateur introuvable' });
+
+    // Extraire les favoris et notes pour ce quiz
+    const favoriteQuestions = {};
+    const questionNotes = {};
+    user.favoriteQuestions.forEach(f => {
+      if (f.quizId.toString() === quizId) {
+        favoriteQuestions[f.questionIndex] = true;
+      }
+    });
+    user.questionNotes.forEach(n => {
+      if (n.quizId.toString() === quizId) {
+        questionNotes[n.questionIndex] = n.noteText;
+      }
+    });
+
+    res.json({ favoriteQuestions, questionNotes });
   } catch (err) { res.status(500).json({ message: err.message }); }
 });
 
