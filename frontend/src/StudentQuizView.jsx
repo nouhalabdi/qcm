@@ -123,13 +123,18 @@ function StudentQuizView() {
     const newFav = !favoriteQuestions[index];
     setFavoriteQuestions(prev => ({ ...prev, [index]: newFav }));
     try {
-      await fetch('https://reussite-qcmss-1nc7.onrender.com/api/users/question-favorite', {
+      const res = await fetch('https://reussite-qcmss-1nc7.onrender.com/api/users/question-favorite', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user._id, quizId, questionIndex: index, favorite: newFav })
       });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || 'Erreur lors de la mise à jour du favori');
+      }
     } catch (err) {
       console.error(err);
+      alert(err.message);
       setFavoriteQuestions(prev => ({ ...prev, [index]: !newFav })); // revert
     }
   };
@@ -196,7 +201,7 @@ function StudentQuizView() {
       const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/community/conversations/quiz/${quizId}?userId=${user._id}`);
       const conv = await res.json();
       setChatConversationId(conv._id);
-      setChatTitle(`Discussion - Question ${index+1}`);
+      setChatTitle(`Discussion - Question ${index+1} du QCM`);
       setShowChat(true);
     } catch (err) {
       console.error(err);
