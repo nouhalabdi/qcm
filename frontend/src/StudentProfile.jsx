@@ -408,7 +408,7 @@ function StudentProfile() {
 
   // ✅ منطق إكمال الوحدة (المعدل لضمان ظهور الوحدات)
   const moduleProgress = useMemo(() => {
-    if (modules.length === 0 || allLessons.length === 0 || allQuizzes.length === 0) return [];
+    if (modules.length === 0) return [];
 
     return modules.map(mod => {
       // 1. جميع دروس الوحدة التي لها سنة مستهدفة (حتى لو فارغة)
