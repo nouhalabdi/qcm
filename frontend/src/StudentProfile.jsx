@@ -428,46 +428,19 @@ function StudentProfile() {
         );
       });
 
-      // 3. QCMs من نوع module (امتحانات الوحدة) — لكل السنوات (لا يُفلتر حسب TARGET_ACADEMIC_YEAR)
-      const moduleQuizzes = allQuizzes.filter(q =>
-        q.moduleId?._id?.toString() === mod._id?.toString() &&
-        q.type === 'module'
-      );
-
-      // 4. QCMs من نوع lesson (التابعة لهذه الوحدة) — لكل السنوات (لا يُفلتر حسب TARGET_ACADEMIC_YEAR)
-      const lessonQuizzes = allQuizzes.filter(q =>
-        q.lessonId && (q.lessonId._id || q.lessonId) &&
-        allLessons.some(l => l._id?.toString() === (q.lessonId._id || q.lessonId)?.toString() &&
-          l.moduleId?._id?.toString() === mod._id?.toString()
-        ) &&
-        q.type === 'lesson'
-      );
-
       const totalAvailableLessons = availableLessons.length;
       const readLessonsCount = availableLessons.filter(l => readLessonIds.includes(l._id?.toString())).length;
 
-      const totalModuleQuizzes = moduleQuizzes.length;
-      const completedModuleQuizzes = moduleQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
-
-      const totalLessonQuizzes = lessonQuizzes.length;
-      const completedLessonQuizzes = lessonQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
-
-      // ✅ تحديد حالة الإكمال:
-      // - الدروس (cours/tds/résumé/video/ai): يُؤخذ بعين الاعتبار فقط ما تم إدخاله فعلاً لسنة TARGET_ACADEMIC_YEAR.
-      // - QCMs (نوع module أو lesson): تُحتسب لكل السنوات (بدون فلترة بالسنة) — يجب حل كل QCM موجود مهما كانت سنته.
-      // - إذا لم يوجد أي درس بمحتوى لهذه السنة ولا أي QCM، فالوحدة مكتملة تلقائياً (لا شيء لإنجازه).
-      // - بخلاف ذلك، يجب إنجاز كل عنصر موجود (قراءة كل درس فيه محتوى لسنة 2026-2027 + حل كل QCM من كل السنوات) حتى تُعتبر الوحدة مكتملة.
-      const totalTasks = totalAvailableLessons + totalModuleQuizzes + totalLessonQuizzes;
-      const completedTasks = readLessonsCount + completedModuleQuizzes + completedLessonQuizzes;
+      // ✅ تحديد حالة الإكمال: تعتمد فقط على الدروس (cours/tds/résumé/video/ai) التي تحتوي على محتوى
+      // فعلي مدخل من طرف الأدمن لسنة TARGET_ACADEMIC_YEAR. الـ QCMs لا تدخل في هذا الحساب.
+      // - إذا لم يوجد أي درس بمحتوى لهذه السنة، فالوحدة مكتملة تلقائياً (لا شيء لإنجازه) ولن تظهر في القائمة.
+      // - بخلاف ذلك، يجب قراءة كل درس فيه محتوى لسنة 2026-2027 حتى تُعتبر الوحدة مكتملة وتُنزع من القائمة.
+      const totalTasks = totalAvailableLessons;
+      const completedTasks = readLessonsCount;
       const isComplete = (totalTasks === 0) || (completedTasks === totalTasks);
-
-      // ✅ هل توجد أي مادة مرتبطة بهذه الوحدة (دروس لسنة 2026-2027 أو QCMs من أي سنة) — تُستعمل لإظهار/إخفاء الوحدة من قائمة "غير المكتملة"
-      const hasContentForTargetYear = allTargetYearLessons.length > 0 || totalModuleQuizzes > 0 || totalLessonQuizzes > 0;
 
       return {
         ...mod,
-        hasLessonsForTargetYear: allTargetYearLessons.length > 0,
-        hasContentForTargetYear,
         totalTasks,
         completedTasks,
         isComplete
@@ -503,9 +476,9 @@ function StudentProfile() {
     });
   }, [lessonStatus]);
 
-  // ✅ وحدات غير مكتملة: فقط التي تحتوي على مادة مدخلة (دروس بمحتوى فعلي أو QCMs) لهذه السنة بالذات ولم تكتمل بعد
+  // ✅ كل الوحدات الغير مكتملة بعد (تُنزع تلقائياً بمجرد إنجاز كل مدخلات 2026-2027 المتعلقة بها)
   const incompleteModules = useMemo(() => {
-    return moduleProgress.filter(m => m.hasContentForTargetYear && !m.isComplete);
+    return moduleProgress.filter(m => !m.isComplete);
   }, [moduleProgress]);
 
   // ✅ QCMs غير محلولة (جميع السنوات)
