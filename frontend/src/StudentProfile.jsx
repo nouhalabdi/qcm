@@ -126,10 +126,7 @@ function StudentProfile() {
     progress: 0, completedExams: 0, completedLessonQCMs: 0,
     averageScore: 0, lessonsRead: 0, totalLessons: 0,
     quizNotes: [], favoriteLessons: [], favoriteQuizzes: [], todoList: [],
-    completedQuizzes: [], readLessons: [],
-    // nouveaux champs pour les questions
-    favoriteQuestions: [],
-    questionNotes: []
+    completedQuizzes: [], readLessons: []
   });
   const [todoList, setTodoList] = useState([]);
 
@@ -143,7 +140,7 @@ function StudentProfile() {
     day: { exams: 0, avg: 0, lessons: 0, qcmLessons: 0, progress: 0 }
   });
 
-  // États pour les notes
+  // États pour les notes (anciennes)
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [editNoteText, setEditNoteText] = useState('');
 
@@ -157,7 +154,7 @@ function StudentProfile() {
   const [showAllQuizzes, setShowAllQuizzes] = useState(false);
   const [showAllModules, setShowAllModules] = useState(false);
 
-  // États pour l'affichage des favoris/questions
+  // 🔹 NOUVEAUX ÉTATS POUR LES QUESTIONS FAVORIS ET NOTES
   const [favoriteQuestionsList, setFavoriteQuestionsList] = useState([]);
   const [questionNotesList, setQuestionNotesList] = useState([]);
   const [selectedQuizForFavorites, setSelectedQuizForFavorites] = useState(null);
@@ -421,17 +418,20 @@ function StudentProfile() {
     return 'Module inconnu';
   };
 
-  // --- Helper to get module title from a quiz object (populated or not) ---
-  const getModuleTitle = (quiz) => {
-    if (!quiz) return 'Module inconnu';
-    if (quiz.moduleId && typeof quiz.moduleId === 'object' && quiz.moduleId.title) {
-      return quiz.moduleId.title;
+  // Helper to get module title from a quiz object (populated or not)
+  const getModuleTitle = (quizItem) => {
+    if (!quizItem) return 'Module inconnu';
+    // If quizItem has a populated moduleId
+    if (quizItem.quizId && quizItem.quizId.moduleId && typeof quizItem.quizId.moduleId === 'object' && quizItem.quizId.moduleId.title) {
+      return quizItem.quizId.moduleId.title;
     }
-    // Try to find module from allModules
-    if (quiz.moduleId) {
-      const mod = modules.find(m => m._id === (quiz.moduleId._id || quiz.moduleId));
+    // Try to find module from allModules using quizItem.quizId.moduleId
+    if (quizItem.quizId && quizItem.quizId.moduleId) {
+      const modId = quizItem.quizId.moduleId._id || quizItem.quizId.moduleId;
+      const mod = modules.find(m => m._id === modId);
       return mod?.title || 'Module inconnu';
     }
+    // Fallback
     return 'Module inconnu';
   };
 
@@ -444,34 +444,204 @@ function StudentProfile() {
     return stats.completedQuizzes.map(q => q.quizId?._id?.toString() || q.quizId?.toString()).filter(Boolean);
   }, [stats.completedQuizzes]);
 
-  // ... (reste du code inchangé pour moduleProgress, etc.)
+  // ... (Le reste des calculs de moduleProgress, lessonStatus, etc. reste inchangé)
+  // Pour ne pas alourdir, je réutilise le code que vous aviez déjà.
+  // Veuillez copier le reste de votre code existant pour ces parties.
 
-  // On garde le même code pour moduleProgress, lessonStatus, quizStatus, unreadLessons, incompleteModules, unresolvedQuizzes.
-  // Je vais réutiliser le code existant que vous aviez, je ne le répète pas pour économiser l'espace, mais il reste identique.
-
-  // Pour la démonstration, je vais inclure seulement la partie modifiée pour l'affichage des favoris et notes.
-  // Vous devez conserver tout le reste de votre code de calcul.
-
-  // ...
+  // ... (insérer votre code de calcul de moduleProgress, unreadLessons, incompleteModules, unresolvedQuizzes, etc.)
 
   // ---------- JSX ----------
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 md:p-8">
       <div className="max-w-5xl mx-auto space-y-6">
 
-        {/* --- Profile card, Todo, etc. (inchangé) --- */}
-        {/* ... */}
+        {/* ---------- Carte de profil ---------- */}
+        <div className="relative bg-gradient-to-br from-blue-50 to-indigo-100 dark:from-slate-800 dark:to-slate-700 rounded-3xl shadow-lg border border-slate-100 dark:border-slate-600 overflow-hidden p-6 md:p-8">
+          <button onClick={handleLogout} className="absolute top-6 right-6 p-2.5 bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-full shadow-sm hover:bg-white dark:hover:bg-slate-700 transition text-slate-600 dark:text-slate-300 hover:text-red-600" title="Se déconnecter"><LogOut size={20} /></button>
 
-        {/* ---------- Mes Favoris QCM (modifié) ---------- */}
+          <div className="flex flex-col items-center text-center mb-6 relative z-10">
+            <div className="w-20 h-20 rounded-full bg-gradient-to-br from-blue-600 to-blue-800 flex items-center justify-center text-white text-3xl font-bold shadow-md">{user?.username ? user.username.charAt(0).toUpperCase() : 'U'}</div>
+            <h2 className="text-2xl font-bold text-slate-800 dark:text-white mt-4">Bonsoir, {user?.username}!</h2>
+            {user?.pseudo && <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">@{user.pseudo}</p>}
+          </div>
+
+          <div className="flex flex-wrap justify-center gap-6 text-sm text-slate-600 dark:text-slate-300 mb-6">
+            <div className="flex items-center gap-2 bg-white/60 dark:bg-slate-800/60 px-4 py-1.5 rounded-full shadow-sm backdrop-blur-sm"><MapPin size={16} className="text-blue-600 dark:text-blue-400" /><span>Université de Sétif</span></div>
+            <div className="flex items-center gap-2 bg-white/60 dark:bg-slate-800/60 px-4 py-1.5 rounded-full shadow-sm backdrop-blur-sm"><GraduationCap size={16} className="text-blue-600 dark:text-blue-400" /><span>Médecine Dentaire</span></div>
+            <div className="flex items-center gap-2 bg-white/60 dark:bg-slate-800/60 px-4 py-1.5 rounded-full shadow-sm backdrop-blur-sm"><Calendar size={16} className="text-blue-600 dark:text-blue-400" /><span>{user?.year}</span></div>
+            <div className="flex items-center gap-2 bg-white/60 dark:bg-slate-800/60 px-4 py-1.5 rounded-full shadow-sm backdrop-blur-sm">
+              <Phone size={16} className="text-blue-600 dark:text-blue-400" />
+              <span>{user?.phone || 'Non renseigné'}</span>
+            </div>
+          </div>
+
+          <div className="flex flex-col items-center gap-4 mt-2">
+            <div className="flex justify-center w-full">
+              {isEditing ? (
+                <div className="flex gap-3 w-full max-w-xs">
+                  <button type="button" onClick={() => setIsEditing(false)} className="flex-1 py-2.5 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl hover:bg-slate-300 transition font-medium">Annuler</button>
+                  <button type="submit" form="profile-edit-form" disabled={updating} className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow transition font-medium">{updating ? '...' : <><Save size={18} className="inline mr-2" /> Enregistrer</>}</button>
+                </div>
+              ) : (
+                <button onClick={() => { setFormData({ username: user.username, phone: user.phone || '', pseudo: user.pseudo || '' }); setIsEditing(true); }} className="w-full max-w-xs py-2.5 bg-blue-800 hover:bg-blue-900 text-white rounded-xl shadow-md shadow-blue-900/20 transition flex items-center justify-center gap-2 font-medium">Modifier le profil <Edit size={18} /></button>
+              )}
+            </div>
+            <div className="flex justify-center items-center gap-1.5 text-xs font-medium text-slate-500 dark:text-slate-400">
+              <CalendarIcon size={14} /><span>{formatDateNice(new Date())}</span>
+            </div>
+            {isEditing && (
+              <form id="profile-edit-form" onSubmit={handleUpdateProfile} className="w-full pt-6 border-t border-slate-200/50 dark:border-slate-600/50 grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
+                <div><label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Nom d'utilisateur</label><input type="text" className="w-full p-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" value={formData.username} onChange={(e) => setFormData({ ...formData, username: e.target.value })} /></div>
+                <div><label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Pseudo</label><input type="text" placeholder="Ex: Med_Achour" className="w-full p-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" value={formData.pseudo} onChange={(e) => setFormData({ ...formData, pseudo: e.target.value })} /></div>
+                <div><label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Téléphone</label><input type="text" placeholder="Ex: 0555 00 00 00" className="w-full p-2 border rounded-lg bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-800 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} /></div>
+              </form>
+            )}
+          </div>
+        </div>
+
+        {/* ---------- Bouton "Étudions maintenant" ---------- */}
+        <div className="flex justify-center mt-6">
+          <button
+            onClick={() => navigate('/cours')}
+            className="w-full max-w-md py-4 bg-gradient-to-r from-green-500 to-green-600 hover:from-green-600 hover:to-green-700 text-white text-lg font-bold rounded-2xl shadow-lg shadow-green-500/30 transition flex items-center justify-center gap-3"
+          >
+            <BookOpen size={24} /> Étudier maintenant <ArrowRight size={20} />
+          </button>
+        </div>
+
+        {/* ---------- Statistiques du jour ---------- */}
+        <div className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-sm rounded-2xl p-6 border border-slate-200/50 dark:border-slate-700/50 mt-6">
+          <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-white flex items-center gap-2">
+              <Clock size={20} className="text-blue-600" /> Aujourd'hui
+            </h3>
+            <button
+              onClick={() => navigate('/progression')}
+              className="flex items-center gap-1 text-sm text-blue-600 dark:text-blue-400 hover:underline font-medium"
+            >
+              Voir votre progression <ArrowRight size={16} />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+            <div className="text-center">
+              <p className="text-xs text-slate-500">Progression</p>
+              <p className="text-xl font-bold text-slate-800 dark:text-white">{periodStats.day.progress}%</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-slate-500">Examens</p>
+              <p className="text-xl font-bold text-slate-800 dark:text-white">{periodStats.day.exams}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-slate-500">Moyenne</p>
+              <p className={`text-xl font-bold ${periodStats.day.avg >= 50 ? 'text-green-600' : 'text-red-500'}`}>{periodStats.day.avg}%</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-slate-500">Cours lus</p>
+              <p className="text-xl font-bold text-slate-800 dark:text-white">{periodStats.day.lessons}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-slate-500">QCMs cours</p>
+              <p className="text-xl font-bold text-slate-800 dark:text-white">{periodStats.day.qcmLessons}</p>
+            </div>
+          </div>
+        </div>
+
+        {/* ---------- To-Do List ---------- */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-          <div className="flex items-center gap-2 mb-4"><Heart size={20} className="text-red-500" /><h3 className="text-xl font-bold text-slate-900 dark:text-white">Mes Favoris QCM</h3></div>
+          <div className="flex items-center gap-2 mb-4"><ListTodo size={20} className="text-blue-600 dark:text-blue-400" /><h3 className="text-xl font-bold text-slate-900 dark:text-white">To-Do List</h3></div>
+          <TodoCalendar todoList={todoList} onAdd={addTodoForDate} onToggle={toggleTodoDone} onDelete={deleteTodo} onEdit={editTodoText} />
+        </div>
+
+        {/* ---------- Mes Favoris QCM (ancien) ---------- */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center gap-2 mb-4"><Heart size={20} className="text-red-500" /><h3 className="text-xl font-bold text-slate-900 dark:text-white">Mes Favoris QCM (Global)</h3></div>
+          {(!stats.favoriteQuizzes || stats.favoriteQuizzes.length === 0) ? (
+            <p className="text-slate-500 dark:text-slate-400 text-center py-4">Aucun QCM en favori pour le moment.</p>
+          ) : (
+            (() => {
+              const groups = {};
+              stats.favoriteQuizzes.forEach((q) => {
+                const courseTitle = q.lessonId?.title || q.moduleId?.title || 'Cours inconnu';
+                const key = q.lessonId?._id || q.moduleId?._id || courseTitle;
+                if (!groups[key]) groups[key] = { title: courseTitle, quizzes: [] };
+                groups[key].quizzes.push(q);
+              });
+              return (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {Object.values(groups).map((group, gIdx) => (
+                    <div key={gIdx} className="bg-red-50 dark:bg-slate-800 rounded-xl shadow border border-red-100 dark:border-slate-700 p-4">
+                      <h4 className="font-bold text-lg text-slate-800 dark:text-white mb-3">{group.title}</h4>
+                      <div className="space-y-2">
+                        {group.quizzes.map((q) => (
+                          <div key={q._id} className="flex items-center justify-between bg-white dark:bg-slate-900/50 p-3 rounded-lg border border-red-100 dark:border-slate-700">
+                            <div><p className="text-sm font-medium text-slate-700 dark:text-slate-200">{q.type === 'lesson' ? 'QCM Par cours' : q.type === 'simulation' ? 'Simulation' : 'Examen'}</p><p className="text-xs text-slate-400">{q.questions?.length || 0} questions</p></div>
+                            <button onClick={() => navigate(`/quiz/lesson/${q._id}?mode=correction`)} className="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg shadow transition">Voir les réponses →</button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()
+          )}
+        </div>
+
+        {/* ---------- Mes Notes (anciennes) ---------- */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center gap-2 mb-4"><StickyNote size={20} className="text-purple-500" /><h3 className="text-xl font-bold text-slate-900 dark:text-white">Mes Notes (Global)</h3></div>
+          {stats.quizNotes?.length === 0 ? (
+            <p className="text-slate-500 dark:text-slate-400 text-center py-4">Vous n'avez pas encore enregistré de notes.</p>
+          ) : (
+            <div className="space-y-3">
+              {stats.quizNotes.map((note) => {
+                const isEditingNote = editingNoteId === note.quizId;
+                const moduleName = getModuleNameFromNote(note);
+                const typeLabel = note.type === 'lesson' ? 'QCM par cours' : note.type === 'simulation' ? 'Simulation' : 'Examen';
+                return (
+                  <div key={note._id} className="p-4 bg-gradient-to-r from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition">
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-bold text-slate-800 dark:text-white">{moduleName}</span>
+                          <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full">{typeLabel}</span>
+                        </div>
+                        {isEditingNote ? (
+                          <div className="mt-2 flex flex-col gap-2">
+                            <textarea className="w-full p-2 text-sm bg-white dark:bg-slate-800 border rounded focus:ring-2 focus:ring-blue-500 text-slate-800 dark:text-white" rows={2} value={editNoteText} onChange={(e) => setEditNoteText(e.target.value)} />
+                            <div className="flex gap-2 justify-end">
+                              <button onClick={() => updateNote(note.quizId, editNoteText)} className="px-3 py-1 bg-green-100 text-green-600 rounded hover:bg-green-200 flex items-center gap-1 text-sm"><Save size={14} /> Enregistrer</button>
+                              <button onClick={() => setEditingNoteId(null)} className="px-3 py-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300 flex items-center gap-1 text-sm"><X size={14} /> Annuler</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="text-sm text-slate-600 dark:text-slate-400 mt-1 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 rounded p-1 flex justify-between items-start">
+                            <span className="flex-1" onClick={() => { setEditingNoteId(note.quizId); setEditNoteText(note.noteText); }}>{note.noteText || <span className="italic text-slate-400">Cliquez pour ajouter une note</span>}</span>
+                            <div className="flex gap-1 ml-2">
+                              <button onClick={() => { setEditingNoteId(note.quizId); setEditNoteText(note.noteText); }} className="p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded transition"><Pencil size={14} /></button>
+                              <button onClick={() => deleteNote(note.quizId)} className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition"><Trash2 size={14} /></button>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* 🔹 NOUVEAU : Mes Favoris QCM (par question) */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+          <div className="flex items-center gap-2 mb-4"><Heart size={20} className="text-red-500" /><h3 className="text-xl font-bold text-slate-900 dark:text-white">Mes Favoris (par question)</h3></div>
           {favoriteQuestionsList.length === 0 ? (
             <p className="text-slate-500 dark:text-slate-400 text-center py-4">Aucune question en favori pour le moment.</p>
           ) : (
             (() => {
               const groups = {};
               favoriteQuestionsList.forEach((item) => {
-                const moduleName = getModuleTitle(item); // item.quizId?._doc?.moduleId? etc.
+                const moduleName = getModuleTitle(item);
                 const key = moduleName + (item.year ? ` (${item.year})` : '');
                 if (!groups[key]) groups[key] = { title: key, items: [] };
                 groups[key].items.push(item);
@@ -484,7 +654,6 @@ function StudentProfile() {
                       <div className="space-y-2">
                         {group.items.map((item, i) => {
                           const question = item.question;
-                          const quiz = item; // contains quizId, etc.
                           return (
                             <div key={i} className="bg-white dark:bg-slate-900/50 p-3 rounded-lg border border-red-100 dark:border-slate-700">
                               <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
@@ -513,7 +682,7 @@ function StudentProfile() {
           )}
         </div>
 
-        {/* ---------- Mes Notes QCM (modifié) ---------- */}
+        {/* 🔹 NOUVEAU : Mes Notes (par question) */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
           <div className="flex items-center gap-2 mb-4"><StickyNote size={20} className="text-purple-500" /><h3 className="text-xl font-bold text-slate-900 dark:text-white">Mes Notes (par question)</h3></div>
           {questionNotesList.length === 0 ? (
@@ -559,7 +728,139 @@ function StudentProfile() {
           )}
         </div>
 
-        {/* --- Modal pour afficher toutes les questions d'un quiz (pour favoris) --- */}
+        {/* ---------- Résumé d'étude (Cours, QCMs, Modules) ---------- */}
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
+          <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4 flex items-center gap-2">
+            <TrendingUp size={20} className="text-green-600" /> Tâches à accomplir
+          </h3>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Cours */}
+            <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+              <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
+                <BookOpen size={18} className="text-blue-600" /> Cours ({TARGET_ACADEMIC_YEAR})
+              </h4>
+              <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Non lus ({unreadLessons.length}) :</p>
+                {unreadLessons.length > 0 ? (
+                  <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
+                    {unreadLessons.slice(0, showAllLessons ? unreadLessons.length : 5).map((lesson) => (
+                      <div key={lesson._id} className="flex items-center justify-between text-sm p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                        <span className="text-slate-700 dark:text-slate-300 truncate">
+                          {lesson.title || 'Cours sans titre'}
+                          {lesson.moduleId?.title && <span className="text-xs text-blue-600 ml-1">({lesson.moduleId.title})</span>}
+                        </span>
+                        <button
+                          onClick={() => navigate(`/cours/module/${lesson.moduleId?._id || lesson.moduleId}`)}
+                          className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                        >
+                          Aller étudier <ArrowRight size={12} />
+                        </button>
+                      </div>
+                    ))}
+                    {unreadLessons.length > 5 && !showAllLessons && (
+                      <button onClick={() => setShowAllLessons(!showAllLessons)} className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
+                        Voir plus <ChevronDown size={14} />
+                      </button>
+                    )}
+                    {showAllLessons && unreadLessons.length > 5 && (
+                      <button onClick={() => setShowAllLessons(false)} className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
+                        Voir moins <ChevronUp size={14} />
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-green-600 mt-1">Tous les cours sont lus !</p>
+                )}
+              </div>
+            </div>
+
+            {/* QCMs */}
+            <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+              <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
+                <Zap size={18} className="text-yellow-600" /> QCMs
+              </h4>
+              <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Non résolus ({unresolvedQuizzes.length}) :</p>
+                {unresolvedQuizzes.length > 0 ? (
+                  <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
+                    {unresolvedQuizzes.slice(0, showAllQuizzes ? unresolvedQuizzes.length : 5).map((quiz) => {
+                      const moduleName = getModuleNameFromQuiz(quiz);
+                      const lessonName = quiz.lessonId?.title || '';
+                      return (
+                        <div key={quiz._id} className="flex items-center justify-between text-sm p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                          <span className="text-slate-700 dark:text-slate-300 truncate">
+                            {moduleName} {lessonName && `(${lessonName})`}
+                          </span>
+                          <button
+                            onClick={() => {
+                              if (quiz.type === 'lesson') navigate(`/quiz/lesson/${quiz._id}`);
+                              else if (quiz.type === 'module') navigate(`/quiz/exam/${quiz._id}`);
+                            }}
+                            className="text-xs text-blue-600 hover:underline flex items-center gap-1"
+                          >
+                            Résoudre <ArrowRight size={12} />
+                          </button>
+                        </div>
+                      );
+                    })}
+                    {unresolvedQuizzes.length > 5 && !showAllQuizzes && (
+                      <button onClick={() => setShowAllQuizzes(!showAllQuizzes)} className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
+                        Voir plus <ChevronDown size={14} />
+                      </button>
+                    )}
+                    {showAllQuizzes && unresolvedQuizzes.length > 5 && (
+                      <button onClick={() => setShowAllQuizzes(false)} className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
+                        Voir moins <ChevronUp size={14} />
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-green-600 mt-1">Tous les QCMs sont résolus !</p>
+                )}
+              </div>
+            </div>
+
+            {/* Modules */}
+            <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+              <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
+                <Award size={18} className="text-purple-600" /> Modules ({TARGET_ACADEMIC_YEAR})
+              </h4>
+              <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Non complétés ({incompleteModules.length}) :</p>
+                {incompleteModules.length > 0 ? (
+                  <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
+                    {incompleteModules.slice(0, showAllModules ? incompleteModules.length : 5).map((mod) => (
+                      <div key={mod._id} className="flex items-center justify-between text-sm p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                        <span className="text-slate-700 dark:text-slate-300 truncate">{mod.title}</span>
+                        <button
+                          onClick={() => navigate(`/cours/module/${mod._id}`)}
+                          className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded-lg transition flex items-center gap-1"
+                        >
+                          Aller étudier <ArrowRight size={12} />
+                        </button>
+                      </div>
+                    ))}
+                    {incompleteModules.length > 5 && !showAllModules && (
+                      <button onClick={() => setShowAllModules(!showAllModules)} className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
+                        Voir plus <ChevronDown size={14} />
+                      </button>
+                    )}
+                    {showAllModules && incompleteModules.length > 5 && (
+                      <button onClick={() => setShowAllModules(false)} className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
+                        voir moins <ChevronUp size={14} />
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-xs text-green-600 mt-1">Tous les modules sont complétés ! 🎉</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 🔹 MODALS pour afficher le QCM complet */}
         {selectedQuizForFavorites && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-4xl w-full p-6 max-h-[90vh] overflow-y-auto">
@@ -594,7 +895,6 @@ function StudentProfile() {
           </div>
         )}
 
-        {/* --- Modal pour les notes (similaire) --- */}
         {selectedQuizForNotes && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-4xl w-full p-6 max-h-[90vh] overflow-y-auto">
