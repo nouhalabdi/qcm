@@ -142,7 +142,7 @@ function StudentProfile() {
     day: { exams: 0, avg: 0, lessons: 0, qcmLessons: 0, progress: 0 }
   });
 
-  // États pour les notes
+  // États pour les notes (anciennes)
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [editNoteText, setEditNoteText] = useState('');
 
@@ -156,13 +156,13 @@ function StudentProfile() {
   const [showAllQuizzes, setShowAllQuizzes] = useState(false);
   const [showAllModules, setShowAllModules] = useState(false);
 
-  // 🔹 NOUVEAUX ÉTATS POUR LES QUESTIONS FAVORIS ET NOTES
+  // 🔹 États pour les questions favorites et notes
   const [favoriteQuestionsList, setFavoriteQuestionsList] = useState([]);
   const [questionNotesList, setQuestionNotesList] = useState([]);
   const [selectedQuizForFavorites, setSelectedQuizForFavorites] = useState(null);
   const [selectedQuizForNotes, setSelectedQuizForNotes] = useState(null);
 
-  // ---------- Chargement des données principales (سريع جداً) ----------
+  // ---------- Chargement des données principales ----------
   useEffect(() => {
     if (!user || !user._id) {
       navigate('/auth');
@@ -358,7 +358,7 @@ function StudentProfile() {
     } catch (err) { alert(`Erreur : ${err.message}`); } finally { setUpdating(false); }
   };
 
-  // ---------- Gestion des notes ----------
+  // ---------- Gestion des notes (anciennes) ----------
   const updateNote = async (quizId, newText) => {
     try {
       await fetch('https://reussite-qcmss-1nc7.onrender.com/api/users/quiz-note', {
@@ -420,31 +420,26 @@ function StudentProfile() {
     return 'Module inconnu';
   };
 
-  // ✅ Retourne l'id du module d'un quiz (même logique que getModuleNameFromQuiz, mais renvoie un id stable pour le groupement)
-  const getModuleIdFromQuiz = (quiz) => {
-    if (!quiz) return null;
-    if (quiz.moduleId) {
-      const id = getIdStr(quiz.moduleId);
-      if (id) return id;
+  // Helper to get module title from a quiz object (populated or not) for per-question favorites/notes
+  const getModuleTitle = (item) => {
+    if (!item) return 'Module inconnu';
+    if (item.quizId && item.quizId.moduleId && typeof item.quizId.moduleId === 'object' && item.quizId.moduleId.title) {
+      return item.quizId.moduleId.title;
     }
-    if (quiz.lessonId) {
-      const lessonId = getIdStr(quiz.lessonId);
-      const lesson = allLessons.find(l => getIdStr(l._id) === lessonId);
-      if (lesson?.moduleId) return getIdStr(lesson.moduleId);
+    if (item.quizId && item.quizId.moduleId) {
+      const modId = item.quizId.moduleId._id || item.quizId.moduleId;
+      const mod = modules.find(m => m._id === modId);
+      return mod?.title || 'Module inconnu';
     }
-    return null;
+    return 'Module inconnu';
   };
 
-  // ✅ Normalise un id qui peut être soit une string, soit un objet peuplé ({_id, ...}), soit null/undefined.
-  // C'est ce qui manquait : le backend ne renvoie pas toujours moduleId comme objet peuplé,
-  // donc comparer directement lesson.moduleId?._id échouait silencieusement quand moduleId était déjà une string.
   const getIdStr = (val) => {
     if (val === null || val === undefined) return null;
     if (typeof val === 'object') return (val._id ?? val.id ?? val).toString();
     return val.toString();
   };
 
-  // ✅ Récupère le nom du module d'une leçon, que lesson.moduleId soit peuplé ou juste un id (même logique que StudentProgress.js)
   const getModuleNameFromLesson = (lesson) => {
     if (!lesson) return '';
     if (lesson.moduleId && typeof lesson.moduleId === 'object' && lesson.moduleId.title) {
@@ -454,22 +449,6 @@ function StudentProfile() {
     if (!moduleId) return '';
     const module = modules.find(m => getIdStr(m._id) === moduleId);
     return module?.title || '';
-  };
-
-  // Helper to get module title from a quiz object (populated or not) for per-question favorites/notes
-  const getModuleTitle = (item) => {
-    if (!item) return 'Module inconnu';
-    // If item has a populated quizId with populated moduleId
-    if (item.quizId && item.quizId.moduleId && typeof item.quizId.moduleId === 'object' && item.quizId.moduleId.title) {
-      return item.quizId.moduleId.title;
-    }
-    // Try to find module from allModules using item.quizId.moduleId
-    if (item.quizId && item.quizId.moduleId) {
-      const modId = item.quizId.moduleId._id || item.quizId.moduleId;
-      const mod = modules.find(m => m._id === modId);
-      return mod?.title || 'Module inconnu';
-    }
-    return 'Module inconnu';
   };
 
   // ---------- حساب الحالات باستخدام useMemo ----------
@@ -486,15 +465,12 @@ function StudentProfile() {
     if (modules.length === 0) return [];
 
     return modules.map(mod => {
-      // 1. جميع دروس الوحدة التي لها سنة مستهدفة (حتى لو فارغة)
-      // ✅ نستعمل getIdStr لأن lesson.moduleId قد يكون string بسيط أو object مُعبّأ — المقارنة المباشرة كانت تفشل بصمت
       const modIdStr = getIdStr(mod._id);
       const allTargetYearLessons = allLessons.filter(l =>
         getIdStr(l.moduleId) === modIdStr &&
         (l.yearContents || []).some(yc => yc.year === TARGET_ACADEMIC_YEAR)
       );
 
-      // 2. الدروس التي تحتوي على محتوى فعلي (هذه فقط التي سيطلب من الطالب دراستها)
       const availableLessons = allTargetYearLessons.filter(lesson => {
         const yearContent = (lesson.yearContents || []).find(yc => yc.year === TARGET_ACADEMIC_YEAR);
         if (!yearContent) return false;
@@ -508,14 +484,12 @@ function StudentProfile() {
       const totalAvailableLessons = availableLessons.length;
       const readLessonsCount = availableLessons.filter(l => readLessonIds.includes(l._id?.toString())).length;
 
-      // 3. QCM par année (نوع module) الخاصة بهذه الوحدة ولسنة 2026-2027 بالذات
       const moduleQuizzes = allQuizzes.filter(q =>
         getIdStr(q.moduleId) === modIdStr &&
         q.type === 'module' &&
         q.year === TARGET_ACADEMIC_YEAR
       );
 
-      // 4. QCM par cours (نوع lesson) التابعة لدروس هذه الوحدة ولسنة 2026-2027 بالذات
       const lessonQuizzes = allQuizzes.filter(q => {
         if (q.type !== 'lesson' || q.year !== TARGET_ACADEMIC_YEAR) return false;
         const qLessonId = getIdStr(q.lessonId);
@@ -529,10 +503,6 @@ function StudentProfile() {
       const totalLessonQuizzes = lessonQuizzes.length;
       const completedLessonQuizzes = lessonQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
 
-      // ✅ تحديد حالة الإكمال: الدروس (cours/tds/résumé/video/ai) + QCM (par année وpar cours)
-      // التي تحتوي على محتوى/تم إدخالها فعلياً من طرف الأدمن لسنة TARGET_ACADEMIC_YEAR فقط.
-      // - إذا لم يوجد أي درس بمحتوى ولا أي QCM لهذه السنة، فالوحدة مكتملة تلقائياً (لا شيء لإنجازه) ولن تظهر في القائمة.
-      // - بخلاف ذلك، يجب قراءة كل درس فيه محتوى + حل كل QCM (par année/par cours) لسنة 2026-2027 حتى تُعتبر الوحدة مكتملة وتُنزع من القائمة.
       const totalTasks = totalAvailableLessons + totalModuleQuizzes + totalLessonQuizzes;
       const completedTasks = readLessonsCount + completedModuleQuizzes + completedLessonQuizzes;
       const isComplete = (totalTasks === 0) || (completedTasks === totalTasks);
@@ -574,7 +544,7 @@ function StudentProfile() {
     });
   }, [lessonStatus]);
 
-  // ✅ كل الوحدات الغير مكتملة بعد (تُنزع تلقائياً بمجرد إنجاز كل مدخلات 2026-2027 المتعلقة بها)
+  // ✅ كل الوحدات الغير مكتملة بعد
   const incompleteModules = useMemo(() => {
     return moduleProgress.filter(m => !m.isComplete);
   }, [moduleProgress]);
@@ -584,7 +554,7 @@ function StudentProfile() {
     return quizStatus.filter(q => !q.isResolved && (q.type === 'lesson' || q.type === 'module'));
   }, [quizStatus]);
 
-  // ---------- JSX (تمت إزالة شاشة التحميل لتصبح الصفحة سريعة) ----------
+  // ---------- JSX ----------
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-4 md:p-8">
       <div className="max-w-5xl mx-auto space-y-6">
@@ -686,103 +656,9 @@ function StudentProfile() {
           <TodoCalendar todoList={todoList} onAdd={addTodoForDate} onToggle={toggleTodoDone} onDelete={deleteTodo} onEdit={editTodoText} />
         </div>
 
-        {/* ---------- Mes Favoris QCM (Global) ---------- */}
+        {/* ---------- Mes Favoris QCM ---------- */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-          <div className="flex items-center gap-2 mb-4"><Heart size={20} className="text-red-500" /><h3 className="text-xl font-bold text-slate-900 dark:text-white">Mes Favoris QCM (Global)</h3></div>
-          {(!stats.favoriteQuizzes || stats.favoriteQuizzes.length === 0) ? (
-            <p className="text-slate-500 dark:text-slate-400 text-center py-4">Aucun QCM en favori pour le moment.</p>
-          ) : (
-            (() => {
-              const groups = {};
-              stats.favoriteQuizzes.forEach((q) => {
-                const moduleName = getModuleNameFromQuiz(q);
-                const moduleKey = getModuleIdFromQuiz(q) || moduleName;
-                if (!groups[moduleKey]) groups[moduleKey] = { title: moduleName, quizzes: [] };
-                groups[moduleKey].quizzes.push(q);
-              });
-              return (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {Object.values(groups).map((group, gIdx) => (
-                    <div key={gIdx} className="bg-red-50 dark:bg-slate-800 rounded-xl shadow border border-red-100 dark:border-slate-700 p-4">
-                      <h4 className="font-bold text-lg text-slate-800 dark:text-white mb-3">{group.title}</h4>
-                      <div className="space-y-2">
-                        {group.quizzes.map((q) => {
-                          const label = q.type === 'module'
-                            ? `Examen${q.year ? ` (${q.year})` : ''}`
-                            : q.type === 'simulation'
-                              ? 'Simulation'
-                              : q.isIA
-                                ? `QCM IA${q.title ? ` - ${q.title}` : ''}`
-                                : `QCM Cours${q.title ? ` - ${q.title}` : ''}`;
-                          return (
-                            <div key={q._id} className="flex items-center justify-between bg-white dark:bg-slate-900/50 p-3 rounded-lg border border-red-100 dark:border-slate-700">
-                              <div><p className="text-sm font-medium text-slate-700 dark:text-slate-200 break-words whitespace-normal">{label}</p><p className="text-xs text-slate-400">{q.questions?.length || 0} questions</p></div>
-                              <button
-                                onClick={() => navigate(q.type === 'module' ? `/quiz/exam/${q._id}` : `/quiz/lesson/${q._id}`)}
-                                className="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg shadow transition flex-shrink-0"
-                              >
-                                Aller au QCM →
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()
-          )}
-        </div>
-
-        {/* ---------- Mes Notes (Global) ---------- */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-          <div className="flex items-center gap-2 mb-4"><StickyNote size={20} className="text-purple-500" /><h3 className="text-xl font-bold text-slate-900 dark:text-white">Mes Notes (Global)</h3></div>
-          {stats.quizNotes?.length === 0 ? (
-            <p className="text-slate-500 dark:text-slate-400 text-center py-4">Vous n'avez pas encore enregistré de notes.</p>
-          ) : (
-            <div className="space-y-3">
-              {stats.quizNotes.map((note) => {
-                const isEditingNote = editingNoteId === note.quizId;
-                const moduleName = getModuleNameFromNote(note);
-                const typeLabel = note.type === 'lesson' ? 'QCM par cours' : note.type === 'simulation' ? 'Simulation' : 'Examen';
-                return (
-                  <div key={note._id} className="p-4 bg-gradient-to-r from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition">
-                    <div className="flex flex-wrap items-start justify-between gap-2">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-bold text-slate-800 dark:text-white">{moduleName}</span>
-                          <span className="text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full">{typeLabel}</span>
-                        </div>
-                        {isEditingNote ? (
-                          <div className="mt-2 flex flex-col gap-2">
-                            <textarea className="w-full p-2 text-sm bg-white dark:bg-slate-800 border rounded focus:ring-2 focus:ring-blue-500 text-slate-800 dark:text-white" rows={2} value={editNoteText} onChange={(e) => setEditNoteText(e.target.value)} />
-                            <div className="flex gap-2 justify-end">
-                              <button onClick={() => updateNote(note.quizId, editNoteText)} className="px-3 py-1 bg-green-100 text-green-600 rounded hover:bg-green-200 flex items-center gap-1 text-sm"><Save size={14} /> Enregistrer</button>
-                              <button onClick={() => setEditingNoteId(null)} className="px-3 py-1 bg-slate-200 text-slate-600 rounded hover:bg-slate-300 flex items-center gap-1 text-sm"><X size={14} /> Annuler</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="text-sm text-slate-600 dark:text-slate-400 mt-1 cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 rounded p-1 flex justify-between items-start">
-                            <span className="flex-1" onClick={() => { setEditingNoteId(note.quizId); setEditNoteText(note.noteText); }}>{note.noteText || <span className="italic text-slate-400">Cliquez pour ajouter une note</span>}</span>
-                            <div className="flex gap-1 ml-2">
-                              <button onClick={() => { setEditingNoteId(note.quizId); setEditNoteText(note.noteText); }} className="p-1 text-blue-500 hover:text-blue-700 hover:bg-blue-50 rounded transition"><Pencil size={14} /></button>
-                              <button onClick={() => deleteNote(note.quizId)} className="p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded transition"><Trash2 size={14} /></button>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* 🔹 NOUVEAU : Mes Favoris QCM (par question) */}
-        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-          <div className="flex items-center gap-2 mb-4"><Heart size={20} className="text-red-500" /><h3 className="text-xl font-bold text-slate-900 dark:text-white">Mes Favoris (par question)</h3></div>
+          <div className="flex items-center gap-2 mb-4"><Heart size={20} className="text-red-500" /><h3 className="text-xl font-bold text-slate-900 dark:text-white">Mes Favoris QCM</h3></div>
           {favoriteQuestionsList.length === 0 ? (
             <p className="text-slate-500 dark:text-slate-400 text-center py-4">Aucune question en favori pour le moment.</p>
           ) : (
@@ -830,9 +706,9 @@ function StudentProfile() {
           )}
         </div>
 
-        {/* 🔹 NOUVEAU : Mes Notes (par question) */}
+        {/* ---------- Mes Notes ---------- */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
-          <div className="flex items-center gap-2 mb-4"><StickyNote size={20} className="text-purple-500" /><h3 className="text-xl font-bold text-slate-900 dark:text-white">Mes Notes (par question)</h3></div>
+          <div className="flex items-center gap-2 mb-4"><StickyNote size={20} className="text-purple-500" /><h3 className="text-xl font-bold text-slate-900 dark:text-white">Mes Notes</h3></div>
           {questionNotesList.length === 0 ? (
             <p className="text-slate-500 dark:text-slate-400 text-center py-4">Vous n'avez pas encore enregistré de notes sur des questions.</p>
           ) : (
@@ -883,7 +759,7 @@ function StudentProfile() {
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* ✅ Cours - يظهر فقط الدروس التي تحتوي على محتوى فعلي للسنة 2026-2027 */}
+            {/* ✅ Cours */}
             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
               <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
                 <BookOpen size={18} className="text-blue-600" /> Cours ({TARGET_ACADEMIC_YEAR})
@@ -927,7 +803,7 @@ function StudentProfile() {
               </div>
             </div>
 
-            {/* ✅ QCMs - تبقى لكل السنوات (مع تحسين العرض) */}
+            {/* ✅ QCMs */}
             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
               <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
                 <Zap size={18} className="text-yellow-600" /> QCMs
@@ -978,7 +854,7 @@ function StudentProfile() {
               </div>
             </div>
 
-            {/* ✅ Modules - يعتمد فقط على ما تم إدخاله فعلاً (دروس + QCMs) لسنة 2026-2027 */}
+            {/* ✅ Modules */}
             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
               <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
                 <Award size={18} className="text-purple-600" /> Modules ({TARGET_ACADEMIC_YEAR})
