@@ -411,35 +411,39 @@ function StudentProfile() {
     if (modules.length === 0 || allLessons.length === 0 || allQuizzes.length === 0) return [];
 
     return modules.map(mod => {
-      // 1. الدروس المتاحة (تحتوي على محتوى فعلي للسنة المستهدفة)
-      const modLessons = allLessons.filter(l => l.moduleId?._id?.toString() === mod._id?.toString());
-      const availableLessons = modLessons.filter(lesson => {
+      // 1. جميع دروس الوحدة التي لها سنة مستهدفة (حتى لو فارغة)
+      const allTargetYearLessons = allLessons.filter(l =>
+        l.moduleId?._id?.toString() === mod._id?.toString() &&
+        (l.yearContents || []).some(yc => yc.year === TARGET_ACADEMIC_YEAR)
+      );
+
+      // 2. الدروس التي تحتوي على محتوى فعلي
+      const availableLessons = allTargetYearLessons.filter(lesson => {
         const yearContent = (lesson.yearContents || []).find(yc => yc.year === TARGET_ACADEMIC_YEAR);
         if (!yearContent) return false;
-        const hasContent = yearContent.versions.some(version =>
+        return yearContent.versions.some(version =>
           version.pdf?.length > 0 || version.video?.length > 0 || version.summary?.length > 0 ||
           version.td?.length > 0 || version.correction?.length > 0 || version.other?.length > 0 ||
           version.ai?.length > 0 || version.aiSummary?.length > 0
         );
-        return hasContent;
       });
 
-      // 2. QCMs من نوع module (امتحانات الوحدة)
+      // 3. QCMs من نوع module (امتحانات الوحدة)
       const moduleQuizzes = allQuizzes.filter(q =>
         q.moduleId?._id?.toString() === mod._id?.toString() &&
         q.type === 'module'
       );
 
-      // 3. QCMs من نوع lesson (دروس الوحدة) - نأخذ فقط تلك التي تنتمي لدرس من هذه الوحدة
+      // 4. QCMs من نوع lesson (التابعة لهذه الوحدة)
       const lessonQuizzes = allQuizzes.filter(q =>
-        q.lessonId && (q.lessonId._id || q.lessonId) && 
-        allLessons.some(l => l._id?.toString() === (q.lessonId._id || q.lessonId)?.toString() && 
+        q.lessonId && (q.lessonId._id || q.lessonId) &&
+        allLessons.some(l => l._id?.toString() === (q.lessonId._id || q.lessonId)?.toString() &&
           l.moduleId?._id?.toString() === mod._id?.toString()
         ) &&
         q.type === 'lesson'
       );
 
-      const totalLessons = availableLessons.length;
+      const totalAvailableLessons = availableLessons.length;
       const readLessonsCount = availableLessons.filter(l => readLessonIds.includes(l._id?.toString())).length;
 
       const totalModuleQuizzes = moduleQuizzes.length;
@@ -448,14 +452,18 @@ function StudentProfile() {
       const totalLessonQuizzes = lessonQuizzes.length;
       const completedLessonQuizzes = lessonQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
 
-      // ✅ تصحيح شرط الإكمال: فقط إذا كان هناك دروس فعلية يتم حساب الإكمال
-      const isComplete = (totalLessons > 0 && readLessonsCount === totalLessons) &&
-                         (totalModuleQuizzes === 0 || completedModuleQuizzes === totalModuleQuizzes) &&
-                         (totalLessonQuizzes === 0 || completedLessonQuizzes === totalLessonQuizzes);
+      // ✅ تحديد حالة الإكمال:
+      // - إذا لم يكن هناك أي درس يحتوي على محتوى (totalAvailableLessons === 0)، تعتبر الوحدة مكتملة تلقائياً.
+      // - بخلاف ذلك، يجب قراءة جميع الدروس التي تحتوي على محتوى وإكمال جميع QCMs الموجودة.
+      const isComplete = (totalAvailableLessons === 0) ||
+                         (totalAvailableLessons > 0 && readLessonsCount === totalAvailableLessons &&
+                          (totalModuleQuizzes === 0 || completedModuleQuizzes === totalModuleQuizzes) &&
+                          (totalLessonQuizzes === 0 || completedLessonQuizzes === totalLessonQuizzes));
 
       return {
         ...mod,
-        totalLessons,
+        hasLessonsForTargetYear: allTargetYearLessons.length > 0,
+        totalLessons: totalAvailableLessons,
         readLessonsCount,
         totalModuleQuizzes,
         completedModuleQuizzes,
@@ -494,9 +502,13 @@ function StudentProfile() {
     });
   }, [lessonStatus]);
 
-  // ✅ وحدات غير مكتملة: فقط التي تحتوي على دروس للسنة المستهدفة ولم تكتمل بعد
+  // ✅ وحدات غير مكتملة: فقط التي تحتوي على دروس أو QCMs للسنة المستهدفة ولم تكتمل بعد
   const incompleteModules = useMemo(() => {
-    return moduleProgress.filter(m => !m.isComplete && m.totalLessons > 0);
+    return moduleProgress.filter(m => {
+      // يجب أن يكون هناك شيء للقيام به: إما دروس تحتوي على محتوى أو QCMs
+      const hasContent = m.totalLessons > 0 || m.totalModuleQuizzes > 0 || m.totalLessonQuizzes > 0;
+      return hasContent && !m.isComplete;
+    });
   }, [moduleProgress]);
 
   // ✅ QCMs غير محلولة (جميع السنوات)
@@ -748,13 +760,10 @@ function StudentProfile() {
                         <div key={quiz._id} className="flex items-center justify-between text-sm p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
                           <span className="text-slate-700 dark:text-slate-300 truncate break-words whitespace-normal">
                             {quiz.type === 'module' ? (
-                              // QCM par année: عرض اسم الوحدة والسنة فقط (تمت إزالة كلمة Examen)
                               <>{moduleName} ({quiz.year})</>
                             ) : quiz.isIA ? (
-                              // QCM IA: عرض عنوان QCM إذا وجد، وإلا عرض QCM IA فقط
                               <>QCM IA{quiz.title ? ` - ${quiz.title}` : ''} ({moduleName})</>
                             ) : (
-                              // QCM par cours: عرض عنوان QCM إذا وجد، وإلا عرض QCM Cours فقط
                               <>QCM Cours{quiz.title ? ` - ${quiz.title}` : ''} ({moduleName})</>
                             )}
                           </span>
@@ -793,35 +802,44 @@ function StudentProfile() {
                 <Award size={18} className="text-purple-600" /> Modules ({TARGET_ACADEMIC_YEAR})
               </h4>
               <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Non complétés ({incompleteModules.length}) :</p>
-                {incompleteModules.length > 0 ? (
-                  <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
-                    {incompleteModules.slice(0, showAllModules ? incompleteModules.length : 5).map((mod) => (
-                      <div key={mod._id} className="flex items-center justify-between text-sm p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                        <span className="text-slate-700 dark:text-slate-300 truncate">
-                          {mod.title} - {mod.semester || 'Semestre inconnu'}
-                        </span>
-                        <button
-                          onClick={() => navigate(`/cours/module/${mod._id}`)}
-                          className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded-lg transition flex items-center gap-1"
-                        >
-                          Aller étudier <ArrowRight size={12} />
-                        </button>
-                      </div>
-                    ))}
-                    {incompleteModules.length > 5 && !showAllModules && (
-                      <button onClick={() => setShowAllModules(!showAllModules)} className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
-                        Voir plus <ChevronDown size={14} />
-                      </button>
-                    )}
-                    {showAllModules && incompleteModules.length > 5 && (
-                      <button onClick={() => setShowAllModules(false)} className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
-                        voir moins <ChevronUp size={14} />
-                      </button>
-                    )}
-                  </div>
-                ) : (
+                {incompleteModules.length === 0 ? (
                   <p className="text-xs text-green-600 mt-1">Tous les modules de {TARGET_ACADEMIC_YEAR} sont complétés ! 🎉</p>
+                ) : (
+                  <>
+                    {/* Groupement par semestre */}
+                    {['Semestre 1', 'Semestre 2'].map(sem => {
+                      const filtered = incompleteModules.filter(m => m.semester === sem);
+                      if (filtered.length === 0) return null;
+                      return (
+                        <div key={sem} className="mb-4 last:mb-0">
+                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">{sem}</p>
+                          <div className="space-y-2">
+                            {filtered.slice(0, showAllModules ? filtered.length : 5).map((mod) => (
+                              <div key={mod._id} className="flex items-center justify-between text-sm p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
+                                <span className="text-slate-700 dark:text-slate-300 truncate">{mod.title}</span>
+                                <button
+                                  onClick={() => navigate(`/cours/module/${mod._id}`)}
+                                  className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded-lg transition flex items-center gap-1"
+                                >
+                                  Aller étudier <ArrowRight size={12} />
+                                </button>
+                              </div>
+                            ))}
+                            {filtered.length > 5 && !showAllModules && (
+                              <button onClick={() => setShowAllModules(!showAllModules)} className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
+                                Voir plus <ChevronDown size={14} />
+                              </button>
+                            )}
+                            {showAllModules && filtered.length > 5 && (
+                              <button onClick={() => setShowAllModules(false)} className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
+                                Voir moins <ChevronUp size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
                 )}
               </div>
             </div>
