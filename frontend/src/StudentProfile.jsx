@@ -142,7 +142,7 @@ function StudentProfile() {
     day: { exams: 0, avg: 0, lessons: 0, qcmLessons: 0, progress: 0 }
   });
 
-  // États pour les notes (anciennes)
+  // États pour les notes (anciennes - on les garde pour compatibilité)
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [editNoteText, setEditNoteText] = useState('');
 
@@ -156,7 +156,7 @@ function StudentProfile() {
   const [showAllQuizzes, setShowAllQuizzes] = useState(false);
   const [showAllModules, setShowAllModules] = useState(false);
 
-  // 🔹 États pour les questions favorites et notes
+  // 🔹 États pour les questions favorites et notes (per-question)
   const [favoriteQuestionsList, setFavoriteQuestionsList] = useState([]);
   const [questionNotesList, setQuestionNotesList] = useState([]);
   const [selectedQuizForFavorites, setSelectedQuizForFavorites] = useState(null);
@@ -358,7 +358,7 @@ function StudentProfile() {
     } catch (err) { alert(`Erreur : ${err.message}`); } finally { setUpdating(false); }
   };
 
-  // ---------- Gestion des notes (anciennes) ----------
+  // ---------- Gestion des notes (anciennes - conservées) ----------
   const updateNote = async (quizId, newText) => {
     try {
       await fetch('https://reussite-qcmss-1nc7.onrender.com/api/users/quiz-note', {
@@ -656,7 +656,7 @@ function StudentProfile() {
           <TodoCalendar todoList={todoList} onAdd={addTodoForDate} onToggle={toggleTodoDone} onDelete={deleteTodo} onEdit={editTodoText} />
         </div>
 
-        {/* ---------- Mes Favoris QCM ---------- */}
+        {/* ---------- Mes Favoris QCM (par question) ---------- */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
           <div className="flex items-center gap-2 mb-4"><Heart size={20} className="text-red-500" /><h3 className="text-xl font-bold text-slate-900 dark:text-white">Mes Favoris QCM</h3></div>
           {favoriteQuestionsList.length === 0 ? (
@@ -706,7 +706,7 @@ function StudentProfile() {
           )}
         </div>
 
-        {/* ---------- Mes Notes ---------- */}
+        {/* ---------- Mes Notes (par question) ---------- */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
           <div className="flex items-center gap-2 mb-4"><StickyNote size={20} className="text-purple-500" /><h3 className="text-xl font-bold text-slate-900 dark:text-white">Mes Notes</h3></div>
           {questionNotesList.length === 0 ? (
