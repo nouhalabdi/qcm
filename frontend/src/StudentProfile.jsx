@@ -428,19 +428,21 @@ function StudentProfile() {
         );
       });
 
-      // 3. QCMs من نوع module (امتحانات الوحدة)
+      // 3. QCMs من نوع module (امتحانات الوحدة) — فقط تلك المدخلة لهذه السنة بالذات
       const moduleQuizzes = allQuizzes.filter(q =>
         q.moduleId?._id?.toString() === mod._id?.toString() &&
-        q.type === 'module'
+        q.type === 'module' &&
+        q.year === TARGET_ACADEMIC_YEAR
       );
 
-      // 4. QCMs من نوع lesson (التابعة لهذه الوحدة)
+      // 4. QCMs من نوع lesson (التابعة لهذه الوحدة) — فقط تلك المدخلة لهذه السنة بالذات
       const lessonQuizzes = allQuizzes.filter(q =>
         q.lessonId && (q.lessonId._id || q.lessonId) &&
         allLessons.some(l => l._id?.toString() === (q.lessonId._id || q.lessonId)?.toString() &&
           l.moduleId?._id?.toString() === mod._id?.toString()
         ) &&
-        q.type === 'lesson'
+        q.type === 'lesson' &&
+        q.year === TARGET_ACADEMIC_YEAR
       );
 
       const totalAvailableLessons = availableLessons.length;
@@ -453,15 +455,21 @@ function StudentProfile() {
       const completedLessonQuizzes = lessonQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
 
       // ✅ تحديد حالة الإكمال:
-      // - إذا لم يكن هناك أي درس يحتوي على محتوى ولا أي QCM، تعتبر الوحدة مكتملة تلقائياً.
-      // - بخلاف ذلك، يجب قراءة جميع الدروس التي تحتوي على محتوى وإكمال جميع QCMs الموجودة.
+      // - يُؤخذ بعين الاعتبار فقط ما تم إدخاله فعلاً من طرف الأدمن لسنة TARGET_ACADEMIC_YEAR
+      //   (دروس تحتوي على محتوى: pdf/video/résumé/td/correction/ai + QCMs بنوعيها لهذه السنة).
+      // - إذا لم يُدخل أي شيء لهذه الوحدة لهذه السنة، فهي مكتملة تلقائياً (لا شيء لإنجازه).
+      // - بخلاف ذلك، يجب إنجاز كل عنصر تم إدخاله (قراءة كل درس فيه محتوى + حل كل QCM) حتى تُعتبر الوحدة مكتملة.
       const totalTasks = totalAvailableLessons + totalModuleQuizzes + totalLessonQuizzes;
       const completedTasks = readLessonsCount + completedModuleQuizzes + completedLessonQuizzes;
       const isComplete = (totalTasks === 0) || (completedTasks === totalTasks);
 
+      // ✅ هل توجد أي مادة مدخلة لهذه السنة بالذات (دروس أو QCMs) — تُستعمل لإظهار/إخفاء الوحدة من قائمة "غير المكتملة"
+      const hasContentForTargetYear = allTargetYearLessons.length > 0 || totalModuleQuizzes > 0 || totalLessonQuizzes > 0;
+
       return {
         ...mod,
         hasLessonsForTargetYear: allTargetYearLessons.length > 0,
+        hasContentForTargetYear,
         totalTasks,
         completedTasks,
         isComplete
@@ -497,9 +505,9 @@ function StudentProfile() {
     });
   }, [lessonStatus]);
 
-  // ✅ وحدات غير مكتملة: فقط التي تحتوي على دروس (حتى لو فارغة) أو QCMs للسنة المستهدفة ولم تكتمل بعد
+  // ✅ وحدات غير مكتملة: فقط التي تحتوي على مادة مدخلة (دروس بمحتوى فعلي أو QCMs) لهذه السنة بالذات ولم تكتمل بعد
   const incompleteModules = useMemo(() => {
-    return moduleProgress.filter(m => m.hasLessonsForTargetYear && !m.isComplete);
+    return moduleProgress.filter(m => m.hasContentForTargetYear && !m.isComplete);
   }, [moduleProgress]);
 
   // ✅ QCMs غير محلولة (جميع السنوات)
@@ -787,50 +795,48 @@ function StudentProfile() {
               </div>
             </div>
 
-            {/* ✅ Modules - يعتمد على الدروس + QCMs الموجودة فقط للسنة 2026-2027 */}
+            {/* ✅ Modules - يعتمد فقط على ما تم إدخاله فعلاً (دروس + QCMs) لسنة 2026-2027 */}
             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
               <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
                 <Award size={18} className="text-purple-600" /> Modules ({TARGET_ACADEMIC_YEAR})
               </h4>
               <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                <p className="text-xs font-semibold text-slate-500 dark:text-slate-400">Non complétés ({incompleteModules.length}) :</p>
                 {incompleteModules.length === 0 ? (
                   <p className="text-xs text-green-600 mt-1">Tous les modules de {TARGET_ACADEMIC_YEAR} sont complétés ! 🎉</p>
                 ) : (
-                  <>
-                    {/* Groupement par semestre */}
-                    {['Semestre 1', 'Semestre 2'].map(sem => {
-                      const filtered = incompleteModules.filter(m => m.semester === sem);
-                      if (filtered.length === 0) return null;
+                  <div className="space-y-2 mt-2 max-h-60 overflow-y-auto">
+                    {incompleteModules.slice(0, showAllModules ? incompleteModules.length : 5).map((mod) => {
+                      const semLabel = mod.semester === 'Semestre 2' ? 'S2' : mod.semester === 'Semestre 1' ? 'S1' : (mod.semester || '?');
+                      const semColor = mod.semester === 'Semestre 2'
+                        ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+                        : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400';
                       return (
-                        <div key={sem} className="mb-4 last:mb-0">
-                          <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">{sem}</p>
-                          <div className="space-y-2">
-                            {filtered.slice(0, showAllModules ? filtered.length : 5).map((mod) => (
-                              <div key={mod._id} className="flex items-center justify-between text-sm p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                                <span className="text-slate-700 dark:text-slate-300 truncate">{mod.title}</span>
-                                <button
-                                  onClick={() => navigate(`/cours/module/${mod._id}`)}
-                                  className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded-lg transition flex items-center gap-1"
-                                >
-                                  Aller étudier <ArrowRight size={12} />
-                                </button>
-                              </div>
-                            ))}
-                            {filtered.length > 5 && !showAllModules && (
-                              <button onClick={() => setShowAllModules(!showAllModules)} className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
-                                Voir plus <ChevronDown size={14} />
-                              </button>
-                            )}
-                            {showAllModules && filtered.length > 5 && (
-                              <button onClick={() => setShowAllModules(false)} className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
-                                Voir moins <ChevronUp size={14} />
-                              </button>
-                            )}
+                        <div key={mod._id} className="flex items-center justify-between text-sm p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className={`flex-shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded ${semColor}`}>{semLabel}</span>
+                            <span className="text-slate-700 dark:text-slate-300 truncate">{mod.title}</span>
                           </div>
+                          <button
+                            onClick={() => navigate(`/cours/module/${mod._id}`)}
+                            className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded-lg transition flex items-center gap-1 flex-shrink-0"
+                          >
+                            Aller étudier <ArrowRight size={12} />
+                          </button>
                         </div>
                       );
                     })}
-                  </>
+                    {incompleteModules.length > 5 && !showAllModules && (
+                      <button onClick={() => setShowAllModules(true)} className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
+                        Voir plus <ChevronDown size={14} />
+                      </button>
+                    )}
+                    {showAllModules && incompleteModules.length > 5 && (
+                      <button onClick={() => setShowAllModules(false)} className="text-xs text-blue-600 hover:underline flex items-center gap-1 mt-1">
+                        Voir moins <ChevronUp size={14} />
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             </div>
