@@ -428,21 +428,19 @@ function StudentProfile() {
         );
       });
 
-      // 3. QCMs من نوع module (امتحانات الوحدة) — فقط تلك المدخلة لهذه السنة بالذات
+      // 3. QCMs من نوع module (امتحانات الوحدة) — لكل السنوات (لا يُفلتر حسب TARGET_ACADEMIC_YEAR)
       const moduleQuizzes = allQuizzes.filter(q =>
         q.moduleId?._id?.toString() === mod._id?.toString() &&
-        q.type === 'module' &&
-        q.year === TARGET_ACADEMIC_YEAR
+        q.type === 'module'
       );
 
-      // 4. QCMs من نوع lesson (التابعة لهذه الوحدة) — فقط تلك المدخلة لهذه السنة بالذات
+      // 4. QCMs من نوع lesson (التابعة لهذه الوحدة) — لكل السنوات (لا يُفلتر حسب TARGET_ACADEMIC_YEAR)
       const lessonQuizzes = allQuizzes.filter(q =>
         q.lessonId && (q.lessonId._id || q.lessonId) &&
         allLessons.some(l => l._id?.toString() === (q.lessonId._id || q.lessonId)?.toString() &&
           l.moduleId?._id?.toString() === mod._id?.toString()
         ) &&
-        q.type === 'lesson' &&
-        q.year === TARGET_ACADEMIC_YEAR
+        q.type === 'lesson'
       );
 
       const totalAvailableLessons = availableLessons.length;
@@ -455,15 +453,15 @@ function StudentProfile() {
       const completedLessonQuizzes = lessonQuizzes.filter(q => completedQuizIds.includes(q._id?.toString())).length;
 
       // ✅ تحديد حالة الإكمال:
-      // - يُؤخذ بعين الاعتبار فقط ما تم إدخاله فعلاً من طرف الأدمن لسنة TARGET_ACADEMIC_YEAR
-      //   (دروس تحتوي على محتوى: pdf/video/résumé/td/correction/ai + QCMs بنوعيها لهذه السنة).
-      // - إذا لم يُدخل أي شيء لهذه الوحدة لهذه السنة، فهي مكتملة تلقائياً (لا شيء لإنجازه).
-      // - بخلاف ذلك، يجب إنجاز كل عنصر تم إدخاله (قراءة كل درس فيه محتوى + حل كل QCM) حتى تُعتبر الوحدة مكتملة.
+      // - الدروس (cours/tds/résumé/video/ai): يُؤخذ بعين الاعتبار فقط ما تم إدخاله فعلاً لسنة TARGET_ACADEMIC_YEAR.
+      // - QCMs (نوع module أو lesson): تُحتسب لكل السنوات (بدون فلترة بالسنة) — يجب حل كل QCM موجود مهما كانت سنته.
+      // - إذا لم يوجد أي درس بمحتوى لهذه السنة ولا أي QCM، فالوحدة مكتملة تلقائياً (لا شيء لإنجازه).
+      // - بخلاف ذلك، يجب إنجاز كل عنصر موجود (قراءة كل درس فيه محتوى لسنة 2026-2027 + حل كل QCM من كل السنوات) حتى تُعتبر الوحدة مكتملة.
       const totalTasks = totalAvailableLessons + totalModuleQuizzes + totalLessonQuizzes;
       const completedTasks = readLessonsCount + completedModuleQuizzes + completedLessonQuizzes;
       const isComplete = (totalTasks === 0) || (completedTasks === totalTasks);
 
-      // ✅ هل توجد أي مادة مدخلة لهذه السنة بالذات (دروس أو QCMs) — تُستعمل لإظهار/إخفاء الوحدة من قائمة "غير المكتملة"
+      // ✅ هل توجد أي مادة مرتبطة بهذه الوحدة (دروس لسنة 2026-2027 أو QCMs من أي سنة) — تُستعمل لإظهار/إخفاء الوحدة من قائمة "غير المكتملة"
       const hasContentForTargetYear = allTargetYearLessons.length > 0 || totalModuleQuizzes > 0 || totalLessonQuizzes > 0;
 
       return {
