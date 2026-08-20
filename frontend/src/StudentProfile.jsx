@@ -420,6 +420,15 @@ function StudentProfile() {
     return 'Module inconnu';
   };
 
+  // ✅ Normalise un id (string simple, objet peuplé {_id}, ou Mongo ObjectId) en string comparable.
+  // C'est ce qui manquait pour comparer favoriteQuestionsList[i].quizId (ObjectId) à selectedQuizForFavorites.quizId (ObjectId) :
+  // deux ObjectId ne sont JAMAIS égaux avec === même s'ils représentent le même id, il faut comparer leur .toString().
+  const getIdStr = (val) => {
+    if (val === null || val === undefined) return null;
+    if (typeof val === 'object') return (val._id ?? val.id ?? val).toString();
+    return val.toString();
+  };
+
   // Helper to get module title from a quiz object (populated or not) for per-question favorites/notes
   const getModuleTitle = (item) => {
     if (!item) return 'Module inconnu';
@@ -428,16 +437,12 @@ function StudentProfile() {
     }
     if (item.quizId && item.quizId.moduleId) {
       const modId = item.quizId.moduleId._id || item.quizId.moduleId;
-      const mod = modules.find(m => m._id === modId);
+      const mod = modules.find(m => getIdStr(m._id) === getIdStr(modId));
       return mod?.title || 'Module inconnu';
     }
+    // Le backend renvoie déjà moduleTitle calculé côté serveur pour /favorite-questions et /question-notes
+    if (item.moduleTitle) return item.moduleTitle;
     return 'Module inconnu';
-  };
-
-  const getIdStr = (val) => {
-    if (val === null || val === undefined) return null;
-    if (typeof val === 'object') return (val._id ?? val.id ?? val).toString();
-    return val.toString();
   };
 
   const getModuleNameFromLesson = (lesson) => {
@@ -666,40 +671,49 @@ function StudentProfile() {
               const groups = {};
               favoriteQuestionsList.forEach((item) => {
                 const moduleName = getModuleTitle(item);
-                const key = moduleName + (item.year ? ` (${item.year})` : '');
-                if (!groups[key]) groups[key] = { title: key, items: [] };
-                groups[key].items.push(item);
+                if (!groups[moduleName]) groups[moduleName] = { title: moduleName, items: [] };
+                groups[moduleName].items.push(item);
               });
               return (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {Object.values(groups).map((group, gIdx) => (
-                    <div key={gIdx} className="bg-red-50 dark:bg-slate-800 rounded-xl shadow border border-red-100 dark:border-slate-700 p-4">
-                      <h4 className="font-bold text-lg text-slate-800 dark:text-white mb-3">{group.title}</h4>
-                      <div className="space-y-2">
-                        {group.items.map((item, i) => {
-                          const question = item.question;
-                          return (
-                            <div key={i} className="bg-white dark:bg-slate-900/50 p-3 rounded-lg border border-red-100 dark:border-slate-700">
-                              <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                                Question {item.questionIndex + 1}: {question?.questionText || 'Sans texte'}
-                              </p>
-                              <div className="mt-1 text-xs text-slate-500">
-                                <p>Options: {question?.options?.join(' • ')}</p>
-                                {question?.correctAnswer && <p className="text-green-600">✅ Réponse correcte: {question.correctAnswer}</p>}
-                                {!question?.correctAnswer && <p className="text-orange-500">⚠️ Aucune réponse correcte définie.</p>}
+                  {Object.values(groups).map((group, gIdx) => {
+                    // ✅ Regroupe ensuite par QCM (quizId) à l'intérieur du module :
+                    // un QCM "par année" => Examen (année) ; un QCM "par cours"/"IA" => son titre.
+                    const byQuiz = {};
+                    group.items.forEach((item) => {
+                      const quizKey = getIdStr(item.quizId);
+                      if (!byQuiz[quizKey]) {
+                        const quizLabel = item.type === 'module'
+                          ? `Examen${item.year ? ` (${item.year})` : ''}`
+                          : item.isIA
+                            ? `QCM IA${item.title ? ` - ${item.title}` : ''}`
+                            : `QCM Cours${item.title ? ` - ${item.title}` : ''}`;
+                        byQuiz[quizKey] = { label: quizLabel, quizItems: [] };
+                      }
+                      byQuiz[quizKey].quizItems.push(item);
+                    });
+                    return (
+                      <div key={gIdx} className="bg-red-50 dark:bg-slate-800 rounded-xl shadow border border-red-100 dark:border-slate-700 p-4">
+                        <h4 className="font-bold text-lg text-slate-800 dark:text-white mb-3">{group.title}</h4>
+                        <div className="space-y-2">
+                          {Object.values(byQuiz).map((qGroup, qIdx) => (
+                            <div key={qIdx} className="flex items-center justify-between bg-white dark:bg-slate-900/50 p-3 rounded-lg border border-red-100 dark:border-slate-700">
+                              <div>
+                                <p className="text-sm font-medium text-slate-700 dark:text-slate-200 break-words whitespace-normal">{qGroup.label}</p>
+                                <p className="text-xs text-slate-400">{qGroup.quizItems.length} question{qGroup.quizItems.length > 1 ? 's' : ''} en favori</p>
                               </div>
                               <button
-                                onClick={() => setSelectedQuizForFavorites(item)}
-                                className="mt-2 text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg shadow transition"
+                                onClick={() => setSelectedQuizForFavorites(qGroup.quizItems)}
+                                className="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg shadow transition flex-shrink-0"
                               >
                                 Aller au QCM →
                               </button>
                             </div>
-                          );
-                        })}
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               );
             })()
@@ -716,36 +730,47 @@ function StudentProfile() {
               const groups = {};
               questionNotesList.forEach((item) => {
                 const moduleName = getModuleTitle(item);
-                const key = moduleName + (item.year ? ` (${item.year})` : '');
-                if (!groups[key]) groups[key] = { title: key, items: [] };
-                groups[key].items.push(item);
+                if (!groups[moduleName]) groups[moduleName] = { title: moduleName, items: [] };
+                groups[moduleName].items.push(item);
               });
               return (
-                <div className="space-y-3">
-                  {Object.values(groups).map((group, gIdx) => (
-                    <div key={gIdx} className="p-4 bg-gradient-to-r from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md transition">
-                      <h4 className="font-bold text-lg text-slate-800 dark:text-white mb-2">{group.title}</h4>
-                      <div className="space-y-2">
-                        {group.items.map((item, i) => {
-                          const question = item.question;
-                          return (
-                            <div key={i} className="border-b border-slate-200 dark:border-slate-700 pb-2 last:border-0">
-                              <p className="text-sm font-medium text-slate-700 dark:text-slate-200">
-                                Question {item.questionIndex + 1}: {question?.questionText || 'Sans texte'}
-                              </p>
-                              <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">📝 {item.noteText}</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  {Object.values(groups).map((group, gIdx) => {
+                    const byQuiz = {};
+                    group.items.forEach((item) => {
+                      const quizKey = getIdStr(item.quizId);
+                      if (!byQuiz[quizKey]) {
+                        const quizLabel = item.type === 'module'
+                          ? `Examen${item.year ? ` (${item.year})` : ''}`
+                          : item.isIA
+                            ? `QCM IA${item.title ? ` - ${item.title}` : ''}`
+                            : `QCM Cours${item.title ? ` - ${item.title}` : ''}`;
+                        byQuiz[quizKey] = { label: quizLabel, quizItems: [] };
+                      }
+                      byQuiz[quizKey].quizItems.push(item);
+                    });
+                    return (
+                      <div key={gIdx} className="p-4 bg-gradient-to-r from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                        <h4 className="font-bold text-lg text-slate-800 dark:text-white mb-3">{group.title}</h4>
+                        <div className="space-y-2">
+                          {Object.values(byQuiz).map((qGroup, qIdx) => (
+                            <div key={qIdx} className="flex items-center justify-between bg-white dark:bg-slate-900/50 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                              <div>
+                                <p className="text-sm font-medium text-slate-700 dark:text-slate-200 break-words whitespace-normal">{qGroup.label}</p>
+                                <p className="text-xs text-slate-400">{qGroup.quizItems.length} note{qGroup.quizItems.length > 1 ? 's' : ''}</p>
+                              </div>
                               <button
-                                onClick={() => setSelectedQuizForNotes(item)}
-                                className="mt-1 text-xs bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg shadow transition"
+                                onClick={() => setSelectedQuizForNotes(qGroup.quizItems)}
+                                className="text-xs bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg shadow transition flex-shrink-0"
                               >
-                                Voir le QCM →
+                                Aller au QCM →
                               </button>
                             </div>
-                          );
-                        })}
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               );
             })()
@@ -902,33 +927,35 @@ function StudentProfile() {
           </div>
         </div>
 
-        {/* 🔹 MODALS pour afficher le QCM complet */}
+        {/* 🔹 MODAL — Favoris : n'affiche QUE les questions mises en favori pour ce QCM précis */}
         {selectedQuizForFavorites && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-4xl w-full p-6 max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-                  {getModuleTitle(selectedQuizForFavorites)} - {selectedQuizForFavorites.year}
+                  {getModuleTitle(selectedQuizForFavorites[0])}
+                  {selectedQuizForFavorites[0]?.year ? ` - ${selectedQuizForFavorites[0].year}` : ''}
+                  {selectedQuizForFavorites[0]?.title ? ` (${selectedQuizForFavorites[0].title})` : ''}
                 </h3>
                 <button onClick={() => setSelectedQuizForFavorites(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded"><X size={24} /></button>
               </div>
               <div className="space-y-6">
-                {selectedQuizForFavorites.quizId?.questions?.map((q, idx) => {
-                  const isFav = favoriteQuestionsList.some(f => f.quizId === selectedQuizForFavorites.quizId && f.questionIndex === idx);
+                {selectedQuizForFavorites.map((item, idx) => {
+                  const q = item.question;
                   return (
-                    <div key={idx} className={`p-4 border rounded-lg ${isFav ? 'bg-red-50 border-red-200' : 'bg-slate-50 border-slate-200 dark:bg-slate-900 dark:border-slate-700'}`}>
+                    <div key={idx} className="p-4 border rounded-lg bg-red-50 border-red-200 dark:bg-red-900/10 dark:border-red-900/30">
                       <div className="flex items-start justify-between">
-                        <p className="font-medium text-slate-800 dark:text-white">Question {idx+1}: {q.questionText}</p>
-                        {isFav && <Heart size={16} className="text-red-500 fill-current" />}
+                        <p className="font-medium text-slate-800 dark:text-white">Question {item.questionIndex + 1}: {q?.questionText || 'Sans texte'}</p>
+                        <Heart size={16} className="text-red-500 fill-current flex-shrink-0 ml-2" />
                       </div>
                       <div className="mt-2 space-y-1">
-                        {q.options?.map((opt, oi) => (
+                        {q?.options?.map((opt, oi) => (
                           <div key={oi} className={`p-1 rounded ${q.correctAnswer === opt ? 'bg-green-100 dark:bg-green-900/30 text-green-700' : ''}`}>
                             {opt} {q.correctAnswer === opt && '✅'}
                           </div>
                         ))}
                       </div>
-                      {!q.correctAnswer && <p className="text-orange-500 text-xs mt-1">Aucune réponse correcte définie.</p>}
+                      {!q?.correctAnswer && <p className="text-orange-500 text-xs mt-1">Aucune réponse correcte définie.</p>}
                     </div>
                   );
                 })}
@@ -937,32 +964,35 @@ function StudentProfile() {
           </div>
         )}
 
+        {/* 🔹 MODAL — Notes : n'affiche QUE les questions notées pour ce QCM précis */}
         {selectedQuizForNotes && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-4xl w-full p-6 max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-                  {getModuleTitle(selectedQuizForNotes)} - {selectedQuizForNotes.year}
+                  {getModuleTitle(selectedQuizForNotes[0])}
+                  {selectedQuizForNotes[0]?.year ? ` - ${selectedQuizForNotes[0].year}` : ''}
+                  {selectedQuizForNotes[0]?.title ? ` (${selectedQuizForNotes[0].title})` : ''}
                 </h3>
                 <button onClick={() => setSelectedQuizForNotes(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded"><X size={24} /></button>
               </div>
               <div className="space-y-6">
-                {selectedQuizForNotes.quizId?.questions?.map((q, idx) => {
-                  const note = questionNotesList.find(n => n.quizId === selectedQuizForNotes.quizId && n.questionIndex === idx);
+                {selectedQuizForNotes.map((item, idx) => {
+                  const q = item.question;
                   return (
-                    <div key={idx} className={`p-4 border rounded-lg ${note ? 'bg-purple-50 border-purple-200' : 'bg-slate-50 border-slate-200 dark:bg-slate-900 dark:border-slate-700'}`}>
+                    <div key={idx} className="p-4 border rounded-lg bg-purple-50 border-purple-200 dark:bg-purple-900/10 dark:border-purple-900/30">
                       <div className="flex items-start justify-between">
-                        <p className="font-medium text-slate-800 dark:text-white">Question {idx+1}: {q.questionText}</p>
-                        {note && <StickyNote size={16} className="text-purple-500" />}
+                        <p className="font-medium text-slate-800 dark:text-white">Question {item.questionIndex + 1}: {q?.questionText || 'Sans texte'}</p>
+                        <StickyNote size={16} className="text-purple-500 flex-shrink-0 ml-2" />
                       </div>
                       <div className="mt-2 space-y-1">
-                        {q.options?.map((opt, oi) => (
+                        {q?.options?.map((opt, oi) => (
                           <div key={oi} className={`p-1 rounded ${q.correctAnswer === opt ? 'bg-green-100 dark:bg-green-900/30 text-green-700' : ''}`}>
                             {opt} {q.correctAnswer === opt && '✅'}
                           </div>
                         ))}
                       </div>
-                      {note && <p className="mt-2 text-sm text-purple-700 dark:text-purple-400">📝 {note.noteText}</p>}
+                      <p className="mt-2 text-sm text-purple-700 dark:text-purple-400">📝 {item.noteText}</p>
                     </div>
                   );
                 })}
