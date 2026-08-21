@@ -121,7 +121,6 @@ function StudentProfile() {
 
   const TARGET_ACADEMIC_YEAR = '2026-2027';
 
-  // États pour les données du profil
   const [stats, setStats] = useState({
     progress: 0, completedExams: 0, completedLessonQCMs: 0,
     averageScore: 0, lessonsRead: 0, totalLessons: 0,
@@ -150,12 +149,11 @@ function StudentProfile() {
   const [showAllQuizzes, setShowAllQuizzes] = useState(false);
   const [showAllModules, setShowAllModules] = useState(false);
 
-  // 🔹 États pour les questions favorites et notes (per-question)
   const [favoriteQuestionsList, setFavoriteQuestionsList] = useState([]);
   const [questionNotesList, setQuestionNotesList] = useState([]);
-  const [modalItems, setModalItems] = useState(null); // items à afficher dans la modale
+  const [modalItems, setModalItems] = useState(null);
   const [modalTitle, setModalTitle] = useState('');
-  const [modalType, setModalType] = useState('favorite'); // 'favorite' ou 'note'
+  const [modalType, setModalType] = useState('favorite');
 
   // ---------- Chargement des données principales ----------
   useEffect(() => {
@@ -544,7 +542,7 @@ function StudentProfile() {
     return quizStatus.filter(q => !q.isResolved && (q.type === 'lesson' || q.type === 'module'));
   }, [quizStatus]);
 
-  // ---------- Fonction pour ouvrir la modale avec les éléments groupés ----------
+  // ---------- Fonction pour ouvrir la modale ----------
   const openModal = (items, title, type) => {
     setModalItems(items);
     setModalTitle(title);
@@ -660,26 +658,15 @@ function StudentProfile() {
             <p className="text-slate-500 dark:text-slate-400 text-center py-4">Aucune question en favori pour le moment.</p>
           ) : (
             (() => {
-              // Groupement par module -> par type (examen/cours/IA) -> par quizId (année ou titre)
+              // Groupement par Module -> Type (Examen / QCM Cours / QCM IA) -> liste des items
               const modulesMap = {};
               favoriteQuestionsList.forEach((item) => {
                 const modTitle = getModuleTitle(item);
                 if (!modulesMap[modTitle]) modulesMap[modTitle] = { title: modTitle, types: {} };
 
                 const type = item.type === 'module' ? 'examen' : item.isIA ? 'ia' : 'cours';
-                if (!modulesMap[modTitle].types[type]) modulesMap[modTitle].types[type] = { label: type === 'examen' ? 'Examens' : type === 'ia' ? 'QCM IA' : 'QCM Cours', quizzes: {} };
-
-                // Clé unique pour ce QCM (quizId)
-                const quizKey = getIdStr(item.quizId);
-                if (!modulesMap[modTitle].types[type].quizzes[quizKey]) {
-                  // Construire le sous-titre selon le type
-                  let subLabel = '';
-                  if (type === 'examen') subLabel = `Année ${item.year || '?'}`;
-                  else if (type === 'cours') subLabel = item.title || 'QCM Cours';
-                  else subLabel = item.title || 'QCM IA';
-                  modulesMap[modTitle].types[type].quizzes[quizKey] = { label: subLabel, items: [] };
-                }
-                modulesMap[modTitle].types[type].quizzes[quizKey].items.push(item);
+                if (!modulesMap[modTitle].types[type]) modulesMap[modTitle].types[type] = { label: type === 'examen' ? 'Examens' : type === 'ia' ? 'QCM IA' : 'QCM Cours', items: [] };
+                modulesMap[modTitle].types[type].items.push(item);
               });
 
               return (
@@ -688,21 +675,14 @@ function StudentProfile() {
                     <div key={modIdx} className="bg-red-50 dark:bg-slate-800 rounded-xl shadow border border-red-100 dark:border-slate-700 p-4">
                       <h4 className="font-bold text-lg text-slate-800 dark:text-white mb-3">{mod.title}</h4>
                       {Object.values(mod.types).map((typeGroup, typeIdx) => (
-                        <div key={typeIdx} className="mb-3 last:mb-0">
-                          <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">{typeGroup.label}</h5>
-                          <div className="space-y-2">
-                            {Object.values(typeGroup.quizzes).map((quizGroup, quizIdx) => (
-                              <div key={quizIdx} className="flex items-center justify-between bg-white dark:bg-slate-900/50 p-2 rounded-lg border border-red-100 dark:border-slate-700">
-                                <span className="text-sm font-medium text-slate-700 dark:text-slate-200 break-words">{quizGroup.label}</span>
-                                <button
-                                  onClick={() => openModal(quizGroup.items, `${mod.title} - ${typeGroup.label} - ${quizGroup.label}`, 'favorite')}
-                                  className="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg shadow transition flex-shrink-0"
-                                >
-                                  Aller au QCM →
-                                </button>
-                              </div>
-                            ))}
-                          </div>
+                        <div key={typeIdx} className="flex items-center justify-between bg-white dark:bg-slate-900/50 p-2 rounded-lg border border-red-100 dark:border-slate-700 mb-2 last:mb-0">
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{typeGroup.label}</span>
+                          <button
+                            onClick={() => openModal(typeGroup.items, `${mod.title} - ${typeGroup.label}`, 'favorite')}
+                            className="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg shadow transition flex-shrink-0"
+                          >
+                            Aller au QCM →
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -727,17 +707,8 @@ function StudentProfile() {
                 if (!modulesMap[modTitle]) modulesMap[modTitle] = { title: modTitle, types: {} };
 
                 const type = item.type === 'module' ? 'examen' : item.isIA ? 'ia' : 'cours';
-                if (!modulesMap[modTitle].types[type]) modulesMap[modTitle].types[type] = { label: type === 'examen' ? 'Examens' : type === 'ia' ? 'QCM IA' : 'QCM Cours', quizzes: {} };
-
-                const quizKey = getIdStr(item.quizId);
-                if (!modulesMap[modTitle].types[type].quizzes[quizKey]) {
-                  let subLabel = '';
-                  if (type === 'examen') subLabel = `Année ${item.year || '?'}`;
-                  else if (type === 'cours') subLabel = item.title || 'QCM Cours';
-                  else subLabel = item.title || 'QCM IA';
-                  modulesMap[modTitle].types[type].quizzes[quizKey] = { label: subLabel, items: [] };
-                }
-                modulesMap[modTitle].types[type].quizzes[quizKey].items.push(item);
+                if (!modulesMap[modTitle].types[type]) modulesMap[modTitle].types[type] = { label: type === 'examen' ? 'Examens' : type === 'ia' ? 'QCM IA' : 'QCM Cours', items: [] };
+                modulesMap[modTitle].types[type].items.push(item);
               });
 
               return (
@@ -746,21 +717,14 @@ function StudentProfile() {
                     <div key={modIdx} className="bg-purple-50 dark:bg-slate-800 rounded-xl shadow border border-purple-100 dark:border-slate-700 p-4">
                       <h4 className="font-bold text-lg text-slate-800 dark:text-white mb-3">{mod.title}</h4>
                       {Object.values(mod.types).map((typeGroup, typeIdx) => (
-                        <div key={typeIdx} className="mb-3 last:mb-0">
-                          <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">{typeGroup.label}</h5>
-                          <div className="space-y-2">
-                            {Object.values(typeGroup.quizzes).map((quizGroup, quizIdx) => (
-                              <div key={quizIdx} className="flex items-center justify-between bg-white dark:bg-slate-900/50 p-2 rounded-lg border border-purple-100 dark:border-slate-700">
-                                <span className="text-sm font-medium text-slate-700 dark:text-slate-200 break-words">{quizGroup.label}</span>
-                                <button
-                                  onClick={() => openModal(quizGroup.items, `${mod.title} - ${typeGroup.label} - ${quizGroup.label}`, 'note')}
-                                  className="text-xs bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg shadow transition flex-shrink-0"
-                                >
-                                  Aller au QCM →
-                                </button>
-                              </div>
-                            ))}
-                          </div>
+                        <div key={typeIdx} className="flex items-center justify-between bg-white dark:bg-slate-900/50 p-2 rounded-lg border border-purple-100 dark:border-slate-700 mb-2 last:mb-0">
+                          <span className="text-sm font-medium text-slate-700 dark:text-slate-200">{typeGroup.label}</span>
+                          <button
+                            onClick={() => openModal(typeGroup.items, `${mod.title} - ${typeGroup.label}`, 'note')}
+                            className="text-xs bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg shadow transition flex-shrink-0"
+                          >
+                            Aller au QCM →
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -921,7 +885,7 @@ function StudentProfile() {
           </div>
         </div>
 
-        {/* 🔹 MODALE : affiche les questions groupées par QCM (favoris ou notes) */}
+        {/* 🔹 MODALE : affiche les questions groupées par type (favoris ou notes) */}
         {modalItems && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-4xl w-full p-6 max-h-[90vh] overflow-y-auto">
@@ -932,10 +896,20 @@ function StudentProfile() {
               <div className="space-y-6">
                 {modalItems.map((item, idx) => {
                   const q = item.question;
+                  // Déterminer le label à afficher à côté de la question
+                  let labelInfo = '';
+                  if (item.type === 'module') {
+                    labelInfo = item.year ? ` (Année ${item.year})` : '';
+                  } else {
+                    labelInfo = item.title ? ` (QCM: ${item.title})` : '';
+                  }
                   return (
                     <div key={idx} className="p-4 border rounded-lg bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700">
                       <div className="flex items-start justify-between">
-                        <p className="font-medium text-slate-800 dark:text-white">Question {item.questionIndex + 1}: {q?.questionText || 'Sans texte'}</p>
+                        <p className="font-medium text-slate-800 dark:text-white">
+                          Question {item.questionIndex + 1}: {q?.questionText || 'Sans texte'}
+                          {labelInfo && <span className="text-xs text-blue-600 ml-1">{labelInfo}</span>}
+                        </p>
                         {modalType === 'favorite' ? (
                           <Heart size={16} className="text-red-500 fill-current flex-shrink-0 ml-2" />
                         ) : (
