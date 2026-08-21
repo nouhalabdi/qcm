@@ -44,6 +44,11 @@ function StudentQuizView() {
   const [rankingData, setRankingData] = useState(null);
   const [isRankingModalOpen, setIsRankingModalOpen] = useState(false);
 
+  // ✅ FIX: cette state était utilisée (lastTimeTaken / setLastTimeTaken) mais jamais déclarée,
+  // ce qui provoquait un "ReferenceError: setLastTimeTaken is not defined" au chargement en mode
+  // révision/correction, cassant tout l'écran de résultats.
+  const [lastTimeTaken, setLastTimeTaken] = useState(0);
+
   const [zoomedImage, setZoomedImage] = useState(null);
 
   // --- Load quiz and per-question data ---
@@ -456,8 +461,9 @@ function StudentQuizView() {
                 {quiz.questions[currentQuestionIndex].options.map((opt, idx) => {
                   let btnClass = "w-full text-left p-3 border rounded-lg bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 transition";
                   const isSelected = selectedAnswers[currentQuestionIndex] === opt;
-                  const isCorrect = opt === quiz.questions[currentQuestionIndex].correctAnswer;
-                  const revealCorrection = effectiveCorrectionMode === 'immediate';
+                  const hasCorrectAnswer = !!quiz.questions[currentQuestionIndex].correctAnswer;
+                  const isCorrect = hasCorrectAnswer && opt === quiz.questions[currentQuestionIndex].correctAnswer;
+                  const revealCorrection = effectiveCorrectionMode === 'immediate' && hasCorrectAnswer;
 
                   if (isSelected) {
                     if (revealCorrection) {
