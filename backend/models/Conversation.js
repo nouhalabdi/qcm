@@ -10,8 +10,12 @@ const ConversationSchema = new mongoose.Schema({
   // ✅ pour les groupes de module
   moduleId: { type: mongoose.Schema.Types.ObjectId, ref: 'Module' },
 
-  // ✅ AJOUT : pour les discussions autour d'un QCM
+  // ✅ pour les discussions autour d'un QCM
   quizId: { type: mongoose.Schema.Types.ObjectId, ref: 'Quiz' },
+
+  // ✅ AJOUT : pour scoper une discussion "quiz" à UNE seule question du QCM
+  // (sans ce champ, la discussion serait partagée par toutes les questions du QCM)
+  questionIndex: { type: Number },
 
   year: { type: String },
   title: { type: String, default: '' }
