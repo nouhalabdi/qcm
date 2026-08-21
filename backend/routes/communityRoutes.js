@@ -72,15 +72,38 @@ router.get('/conversations/module/:moduleId', async (req, res) => {
   }
 });
 
-// 4bis. Créer ou récupérer une conversation pour un QCM
+// 4bis. Créer ou récupérer une conversation pour UNE question précise d'un QCM
+// ✅ CHANGEMENT : la discussion est maintenant scopée à quizId + questionIndex.
+// Avant, seul quizId était utilisé => une seule discussion était partagée par
+// TOUTES les questions du QCM. On exige donc questionIndex en query param ;
+// chaque question du QCM obtient ainsi sa propre conversation dédiée.
 router.get('/conversations/quiz/:quizId', async (req, res) => {
   try {
     const { quizId } = req.params;
-    let conv = await Conversation.findOne({ type: 'quiz', quizId });
+    const { questionIndex } = req.query;
+
+    if (questionIndex === undefined || questionIndex === null || questionIndex === '') {
+      return res.status(400).json({ message: 'questionIndex manquant : la discussion doit être liée à une question précise.' });
+    }
+    const qIndex = parseInt(questionIndex, 10);
+    if (Number.isNaN(qIndex)) {
+      return res.status(400).json({ message: 'questionIndex invalide.' });
+    }
+
+    let conv = await Conversation.findOne({ type: 'quiz', quizId, questionIndex: qIndex });
     if (!conv) {
       const quiz = await Quiz.findById(quizId).populate('moduleId');
       if (!quiz) return res.status(404).json({ message: 'Quiz non trouvé.' });
-      conv = new Conversation({ type: 'quiz', quizId, year: quiz.year, title: `Discussion - ${quiz.title || quiz.year}` });
+      if (qIndex < 0 || qIndex >= (quiz.questions || []).length) {
+        return res.status(400).json({ message: 'questionIndex hors limites pour ce QCM.' });
+      }
+      conv = new Conversation({
+        type: 'quiz',
+        quizId,
+        questionIndex: qIndex,
+        year: quiz.year,
+        title: `${quiz.title || quiz.year} - Question ${qIndex + 1}`
+      });
       await conv.save();
     }
     res.json(conv);
@@ -123,7 +146,9 @@ router.get('/conversations', async (req, res) => {
         const other = conv.participants.find(p => p._id.toString() !== userId);
         displayTitle = other ? (other.pseudo || other.username) : 'Utilisateur';
       } else if (conv.type === 'quiz' && conv.quizId) {
-        displayTitle = `💬 ${conv.quizId.title || 'QCM'}`;
+        // ✅ affiche le numéro de la question concernée dans le titre de la conversation
+        const qLabel = (conv.questionIndex !== undefined && conv.questionIndex !== null) ? ` - Q${conv.questionIndex + 1}` : '';
+        displayTitle = `💬 ${conv.quizId.title || 'QCM'}${qLabel}`;
       }
 
       return {
@@ -131,6 +156,7 @@ router.get('/conversations', async (req, res) => {
         type: conv.type,
         moduleId: conv.moduleId,
         quizId: conv.quizId,
+        questionIndex: conv.questionIndex,
         title: displayTitle,
         lastMessage: lastMsg ? { text: lastMsg.text, date: lastMsg.createdAt, hasAttachment: (lastMsg.attachments || []).length > 0 } : null,
         unreadCount
