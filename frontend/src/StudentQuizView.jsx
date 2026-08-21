@@ -196,16 +196,22 @@ function StudentQuizView() {
   };
 
   // --- Chat per question ---
+  // ✅ CHANGEMENT : on passe désormais questionIndex à l'API pour obtenir une conversation
+  // dédiée à CETTE question précise, et non plus une conversation partagée par tout le QCM.
   const openQuestionChat = async (index) => {
     try {
-      const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/community/conversations/quiz/${quizId}?userId=${user._id}`);
+      const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/community/conversations/quiz/${quizId}?questionIndex=${index}`);
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.message || 'Erreur lors de l\'ouverture du chat.');
+      }
       const conv = await res.json();
       setChatConversationId(conv._id);
-      setChatTitle(`Discussion - Question ${index+1} du QCM`);
+      setChatTitle(`Discussion - Question ${index + 1} du QCM`);
       setShowChat(true);
     } catch (err) {
       console.error(err);
-      alert("Erreur lors de l'ouverture du chat.");
+      alert(err.message || "Erreur lors de l'ouverture du chat.");
     }
   };
 
