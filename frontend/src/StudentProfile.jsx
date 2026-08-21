@@ -119,7 +119,6 @@ function StudentProfile() {
   const navigate = useNavigate();
   const [user, setUser] = useState(() => JSON.parse(localStorage.getItem('user')));
 
-  // السنة الأكاديمية المطلوبة (يتم اختيارها من طرف الأدمن)
   const TARGET_ACADEMIC_YEAR = '2026-2027';
 
   // États pour les données du profil
@@ -131,27 +130,22 @@ function StudentProfile() {
   });
   const [todoList, setTodoList] = useState([]);
 
-  // États pour les données supplémentaires (cours, modules, QCMs)
   const [modules, setModules] = useState([]);
   const [allLessons, setAllLessons] = useState([]);
   const [allQuizzes, setAllQuizzes] = useState([]);
   const extraFetched = useRef(false);
 
-  // États pour les statistiques du jour
   const [periodStats, setPeriodStats] = useState({
     day: { exams: 0, avg: 0, lessons: 0, qcmLessons: 0, progress: 0 }
   });
 
-  // États pour les notes (anciennes - on les garde pour compatibilité)
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [editNoteText, setEditNoteText] = useState('');
 
-  // États pour l'édition du profil
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({ username: user?.username || '', phone: user?.phone || '', pseudo: user?.pseudo || '' });
   const [updating, setUpdating] = useState(false);
 
-  // États pour afficher plus/moins dans le résumé
   const [showAllLessons, setShowAllLessons] = useState(false);
   const [showAllQuizzes, setShowAllQuizzes] = useState(false);
   const [showAllModules, setShowAllModules] = useState(false);
@@ -159,8 +153,9 @@ function StudentProfile() {
   // 🔹 États pour les questions favorites et notes (per-question)
   const [favoriteQuestionsList, setFavoriteQuestionsList] = useState([]);
   const [questionNotesList, setQuestionNotesList] = useState([]);
-  const [selectedQuizForFavorites, setSelectedQuizForFavorites] = useState(null);
-  const [selectedQuizForNotes, setSelectedQuizForNotes] = useState(null);
+  const [modalItems, setModalItems] = useState(null); // items à afficher dans la modale
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalType, setModalType] = useState('favorite'); // 'favorite' ou 'note'
 
   // ---------- Chargement des données principales ----------
   useEffect(() => {
@@ -179,7 +174,6 @@ function StudentProfile() {
         setStats(data);
         setTodoList(fixedTodoList);
 
-        // Calcul des stats du jour
         const now = new Date();
         const completed = data.completedQuizzes || [];
         const readLessons = data.readLessons || [];
@@ -358,7 +352,7 @@ function StudentProfile() {
     } catch (err) { alert(`Erreur : ${err.message}`); } finally { setUpdating(false); }
   };
 
-  // ---------- Gestion des notes (anciennes - conservées) ----------
+  // ---------- Gestion des notes (anciennes) ----------
   const updateNote = async (quizId, newText) => {
     try {
       await fetch('https://reussite-qcmss-1nc7.onrender.com/api/users/quiz-note', {
@@ -383,6 +377,37 @@ function StudentProfile() {
   const handleLogout = () => { localStorage.clear(); navigate('/auth'); window.location.reload(); };
 
   // ---------- Fonctions utilitaires ----------
+  const getIdStr = (val) => {
+    if (val === null || val === undefined) return null;
+    if (typeof val === 'object') return (val._id ?? val.id ?? val).toString();
+    return val.toString();
+  };
+
+  const getModuleTitle = (item) => {
+    if (!item) return 'Module inconnu';
+    if (item.moduleTitle) return item.moduleTitle;
+    if (item.quizId && item.quizId.moduleId && typeof item.quizId.moduleId === 'object' && item.quizId.moduleId.title) {
+      return item.quizId.moduleId.title;
+    }
+    if (item.quizId && item.quizId.moduleId) {
+      const modId = item.quizId.moduleId._id || item.quizId.moduleId;
+      const mod = modules.find(m => getIdStr(m._id) === getIdStr(modId));
+      return mod?.title || 'Module inconnu';
+    }
+    return 'Module inconnu';
+  };
+
+  const getModuleNameFromLesson = (lesson) => {
+    if (!lesson) return '';
+    if (lesson.moduleId && typeof lesson.moduleId === 'object' && lesson.moduleId.title) {
+      return lesson.moduleId.title;
+    }
+    const moduleId = getIdStr(lesson.moduleId);
+    if (!moduleId) return '';
+    const module = modules.find(m => getIdStr(m._id) === moduleId);
+    return module?.title || '';
+  };
+
   const getModuleNameFromQuiz = (quiz) => {
     if (!quiz) return 'Module inconnu';
     if (quiz.moduleId && typeof quiz.moduleId === 'object' && quiz.moduleId.title) {
@@ -420,43 +445,7 @@ function StudentProfile() {
     return 'Module inconnu';
   };
 
-  // ✅ Normalise un id (string simple, objet peuplé {_id}, ou Mongo ObjectId) en string comparable.
-  // C'est ce qui manquait pour comparer favoriteQuestionsList[i].quizId (ObjectId) à selectedQuizForFavorites.quizId (ObjectId) :
-  // deux ObjectId ne sont JAMAIS égaux avec === même s'ils représentent le même id, il faut comparer leur .toString().
-  const getIdStr = (val) => {
-    if (val === null || val === undefined) return null;
-    if (typeof val === 'object') return (val._id ?? val.id ?? val).toString();
-    return val.toString();
-  };
-
-  // Helper to get module title from a quiz object (populated or not) for per-question favorites/notes
-  const getModuleTitle = (item) => {
-    if (!item) return 'Module inconnu';
-    if (item.quizId && item.quizId.moduleId && typeof item.quizId.moduleId === 'object' && item.quizId.moduleId.title) {
-      return item.quizId.moduleId.title;
-    }
-    if (item.quizId && item.quizId.moduleId) {
-      const modId = item.quizId.moduleId._id || item.quizId.moduleId;
-      const mod = modules.find(m => getIdStr(m._id) === getIdStr(modId));
-      return mod?.title || 'Module inconnu';
-    }
-    // Le backend renvoie déjà moduleTitle calculé côté serveur pour /favorite-questions et /question-notes
-    if (item.moduleTitle) return item.moduleTitle;
-    return 'Module inconnu';
-  };
-
-  const getModuleNameFromLesson = (lesson) => {
-    if (!lesson) return '';
-    if (lesson.moduleId && typeof lesson.moduleId === 'object' && lesson.moduleId.title) {
-      return lesson.moduleId.title;
-    }
-    const moduleId = getIdStr(lesson.moduleId);
-    if (!moduleId) return '';
-    const module = modules.find(m => getIdStr(m._id) === moduleId);
-    return module?.title || '';
-  };
-
-  // ---------- حساب الحالات باستخدام useMemo ----------
+  // ---------- Calculs (inchangés) ----------
   const readLessonIds = useMemo(() => {
     return stats.readLessons.map(r => r.lessonId?._id?.toString() || r.lessonId?.toString()).filter(Boolean);
   }, [stats.readLessons]);
@@ -465,7 +454,6 @@ function StudentProfile() {
     return stats.completedQuizzes.map(q => q.quizId?._id?.toString() || q.quizId?.toString()).filter(Boolean);
   }, [stats.completedQuizzes]);
 
-  // ✅ منطق إكمال الوحدة (المعدل لضمان ظهور الوحدات)
   const moduleProgress = useMemo(() => {
     if (modules.length === 0) return [];
 
@@ -535,7 +523,6 @@ function StudentProfile() {
     }));
   }, [allQuizzes, completedQuizIds]);
 
-  // ✅ دروس غير مقروءة (للسنة المستهدفة فقط)
   const unreadLessons = useMemo(() => {
     return lessonStatus.filter(l => {
       const yearContent = (l.yearContents || []).find(yc => yc.year === TARGET_ACADEMIC_YEAR);
@@ -549,15 +536,20 @@ function StudentProfile() {
     });
   }, [lessonStatus]);
 
-  // ✅ كل الوحدات الغير مكتملة بعد
   const incompleteModules = useMemo(() => {
     return moduleProgress.filter(m => !m.isComplete);
   }, [moduleProgress]);
 
-  // ✅ QCMs غير محلولة (جميع السنوات)
   const unresolvedQuizzes = useMemo(() => {
     return quizStatus.filter(q => !q.isResolved && (q.type === 'lesson' || q.type === 'module'));
   }, [quizStatus]);
+
+  // ---------- Fonction pour ouvrir la modale avec les éléments groupés ----------
+  const openModal = (items, title, type) => {
+    setModalItems(items);
+    setModalTitle(title);
+    setModalType(type);
+  };
 
   // ---------- JSX ----------
   return (
@@ -661,116 +653,118 @@ function StudentProfile() {
           <TodoCalendar todoList={todoList} onAdd={addTodoForDate} onToggle={toggleTodoDone} onDelete={deleteTodo} onEdit={editTodoText} />
         </div>
 
-        {/* ---------- Mes Favoris QCM (par question) ---------- */}
+        {/* ---------- Mes Favoris QCM (par question, groupés) ---------- */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
           <div className="flex items-center gap-2 mb-4"><Heart size={20} className="text-red-500" /><h3 className="text-xl font-bold text-slate-900 dark:text-white">Mes Favoris QCM</h3></div>
           {favoriteQuestionsList.length === 0 ? (
             <p className="text-slate-500 dark:text-slate-400 text-center py-4">Aucune question en favori pour le moment.</p>
           ) : (
             (() => {
-              const groups = {};
+              // Groupement par module -> par type (examen/cours/IA) -> par quizId (année ou titre)
+              const modulesMap = {};
               favoriteQuestionsList.forEach((item) => {
-                const moduleName = getModuleTitle(item);
-                if (!groups[moduleName]) groups[moduleName] = { title: moduleName, items: [] };
-                groups[moduleName].items.push(item);
+                const modTitle = getModuleTitle(item);
+                if (!modulesMap[modTitle]) modulesMap[modTitle] = { title: modTitle, types: {} };
+
+                const type = item.type === 'module' ? 'examen' : item.isIA ? 'ia' : 'cours';
+                if (!modulesMap[modTitle].types[type]) modulesMap[modTitle].types[type] = { label: type === 'examen' ? 'Examens' : type === 'ia' ? 'QCM IA' : 'QCM Cours', quizzes: {} };
+
+                // Clé unique pour ce QCM (quizId)
+                const quizKey = getIdStr(item.quizId);
+                if (!modulesMap[modTitle].types[type].quizzes[quizKey]) {
+                  // Construire le sous-titre selon le type
+                  let subLabel = '';
+                  if (type === 'examen') subLabel = `Année ${item.year || '?'}`;
+                  else if (type === 'cours') subLabel = item.title || 'QCM Cours';
+                  else subLabel = item.title || 'QCM IA';
+                  modulesMap[modTitle].types[type].quizzes[quizKey] = { label: subLabel, items: [] };
+                }
+                modulesMap[modTitle].types[type].quizzes[quizKey].items.push(item);
               });
+
               return (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {Object.values(groups).map((group, gIdx) => {
-                    // ✅ Regroupe ensuite par QCM (quizId) à l'intérieur du module :
-                    // un QCM "par année" => Examen (année) ; un QCM "par cours"/"IA" => son titre.
-                    const byQuiz = {};
-                    group.items.forEach((item) => {
-                      const quizKey = getIdStr(item.quizId);
-                      if (!byQuiz[quizKey]) {
-                        const quizLabel = item.type === 'module'
-                          ? `Examen${item.year ? ` (${item.year})` : ''}`
-                          : item.isIA
-                            ? `QCM IA${item.title ? ` - ${item.title}` : ''}`
-                            : `QCM Cours${item.title ? ` - ${item.title}` : ''}`;
-                        byQuiz[quizKey] = { label: quizLabel, quizItems: [] };
-                      }
-                      byQuiz[quizKey].quizItems.push(item);
-                    });
-                    return (
-                      <div key={gIdx} className="bg-red-50 dark:bg-slate-800 rounded-xl shadow border border-red-100 dark:border-slate-700 p-4">
-                        <h4 className="font-bold text-lg text-slate-800 dark:text-white mb-3">{group.title}</h4>
-                        <div className="space-y-2">
-                          {Object.values(byQuiz).map((qGroup, qIdx) => (
-                            <div key={qIdx} className="flex items-center justify-between bg-white dark:bg-slate-900/50 p-3 rounded-lg border border-red-100 dark:border-slate-700">
-                              <div>
-                                <p className="text-sm font-medium text-slate-700 dark:text-slate-200 break-words whitespace-normal">{qGroup.label}</p>
-                                <p className="text-xs text-slate-400">{qGroup.quizItems.length} question{qGroup.quizItems.length > 1 ? 's' : ''} en favori</p>
+                  {Object.values(modulesMap).map((mod, modIdx) => (
+                    <div key={modIdx} className="bg-red-50 dark:bg-slate-800 rounded-xl shadow border border-red-100 dark:border-slate-700 p-4">
+                      <h4 className="font-bold text-lg text-slate-800 dark:text-white mb-3">{mod.title}</h4>
+                      {Object.values(mod.types).map((typeGroup, typeIdx) => (
+                        <div key={typeIdx} className="mb-3 last:mb-0">
+                          <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">{typeGroup.label}</h5>
+                          <div className="space-y-2">
+                            {Object.values(typeGroup.quizzes).map((quizGroup, quizIdx) => (
+                              <div key={quizIdx} className="flex items-center justify-between bg-white dark:bg-slate-900/50 p-2 rounded-lg border border-red-100 dark:border-slate-700">
+                                <span className="text-sm font-medium text-slate-700 dark:text-slate-200 break-words">{quizGroup.label}</span>
+                                <button
+                                  onClick={() => openModal(quizGroup.items, `${mod.title} - ${typeGroup.label} - ${quizGroup.label}`, 'favorite')}
+                                  className="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg shadow transition flex-shrink-0"
+                                >
+                                  Aller au QCM →
+                                </button>
                               </div>
-                              <button
-                                onClick={() => setSelectedQuizForFavorites(qGroup.quizItems)}
-                                className="text-xs bg-red-600 hover:bg-red-700 text-white px-3 py-1.5 rounded-lg shadow transition flex-shrink-0"
-                              >
-                                Aller au QCM →
-                              </button>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      ))}
+                    </div>
+                  ))}
                 </div>
               );
             })()
           )}
         </div>
 
-        {/* ---------- Mes Notes (par question) ---------- */}
+        {/* ---------- Mes Notes (par question, groupés) ---------- */}
         <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 p-6">
           <div className="flex items-center gap-2 mb-4"><StickyNote size={20} className="text-purple-500" /><h3 className="text-xl font-bold text-slate-900 dark:text-white">Mes Notes</h3></div>
           {questionNotesList.length === 0 ? (
             <p className="text-slate-500 dark:text-slate-400 text-center py-4">Vous n'avez pas encore enregistré de notes sur des questions.</p>
           ) : (
             (() => {
-              const groups = {};
+              // Même logique de groupement
+              const modulesMap = {};
               questionNotesList.forEach((item) => {
-                const moduleName = getModuleTitle(item);
-                if (!groups[moduleName]) groups[moduleName] = { title: moduleName, items: [] };
-                groups[moduleName].items.push(item);
+                const modTitle = getModuleTitle(item);
+                if (!modulesMap[modTitle]) modulesMap[modTitle] = { title: modTitle, types: {} };
+
+                const type = item.type === 'module' ? 'examen' : item.isIA ? 'ia' : 'cours';
+                if (!modulesMap[modTitle].types[type]) modulesMap[modTitle].types[type] = { label: type === 'examen' ? 'Examens' : type === 'ia' ? 'QCM IA' : 'QCM Cours', quizzes: {} };
+
+                const quizKey = getIdStr(item.quizId);
+                if (!modulesMap[modTitle].types[type].quizzes[quizKey]) {
+                  let subLabel = '';
+                  if (type === 'examen') subLabel = `Année ${item.year || '?'}`;
+                  else if (type === 'cours') subLabel = item.title || 'QCM Cours';
+                  else subLabel = item.title || 'QCM IA';
+                  modulesMap[modTitle].types[type].quizzes[quizKey] = { label: subLabel, items: [] };
+                }
+                modulesMap[modTitle].types[type].quizzes[quizKey].items.push(item);
               });
+
               return (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {Object.values(groups).map((group, gIdx) => {
-                    const byQuiz = {};
-                    group.items.forEach((item) => {
-                      const quizKey = getIdStr(item.quizId);
-                      if (!byQuiz[quizKey]) {
-                        const quizLabel = item.type === 'module'
-                          ? `Examen${item.year ? ` (${item.year})` : ''}`
-                          : item.isIA
-                            ? `QCM IA${item.title ? ` - ${item.title}` : ''}`
-                            : `QCM Cours${item.title ? ` - ${item.title}` : ''}`;
-                        byQuiz[quizKey] = { label: quizLabel, quizItems: [] };
-                      }
-                      byQuiz[quizKey].quizItems.push(item);
-                    });
-                    return (
-                      <div key={gIdx} className="p-4 bg-gradient-to-r from-slate-50 to-blue-50 dark:from-slate-900 dark:to-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                        <h4 className="font-bold text-lg text-slate-800 dark:text-white mb-3">{group.title}</h4>
-                        <div className="space-y-2">
-                          {Object.values(byQuiz).map((qGroup, qIdx) => (
-                            <div key={qIdx} className="flex items-center justify-between bg-white dark:bg-slate-900/50 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
-                              <div>
-                                <p className="text-sm font-medium text-slate-700 dark:text-slate-200 break-words whitespace-normal">{qGroup.label}</p>
-                                <p className="text-xs text-slate-400">{qGroup.quizItems.length} note{qGroup.quizItems.length > 1 ? 's' : ''}</p>
+                  {Object.values(modulesMap).map((mod, modIdx) => (
+                    <div key={modIdx} className="bg-purple-50 dark:bg-slate-800 rounded-xl shadow border border-purple-100 dark:border-slate-700 p-4">
+                      <h4 className="font-bold text-lg text-slate-800 dark:text-white mb-3">{mod.title}</h4>
+                      {Object.values(mod.types).map((typeGroup, typeIdx) => (
+                        <div key={typeIdx} className="mb-3 last:mb-0">
+                          <h5 className="text-sm font-semibold text-slate-600 dark:text-slate-300 mb-2">{typeGroup.label}</h5>
+                          <div className="space-y-2">
+                            {Object.values(typeGroup.quizzes).map((quizGroup, quizIdx) => (
+                              <div key={quizIdx} className="flex items-center justify-between bg-white dark:bg-slate-900/50 p-2 rounded-lg border border-purple-100 dark:border-slate-700">
+                                <span className="text-sm font-medium text-slate-700 dark:text-slate-200 break-words">{quizGroup.label}</span>
+                                <button
+                                  onClick={() => openModal(quizGroup.items, `${mod.title} - ${typeGroup.label} - ${quizGroup.label}`, 'note')}
+                                  className="text-xs bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg shadow transition flex-shrink-0"
+                                >
+                                  Aller au QCM →
+                                </button>
                               </div>
-                              <button
-                                onClick={() => setSelectedQuizForNotes(qGroup.quizItems)}
-                                className="text-xs bg-purple-600 hover:bg-purple-700 text-white px-3 py-1.5 rounded-lg shadow transition flex-shrink-0"
-                              >
-                                Aller au QCM →
-                              </button>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    );
-                  })}
+                      ))}
+                    </div>
+                  ))}
                 </div>
               );
             })()
@@ -784,7 +778,7 @@ function StudentProfile() {
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* ✅ Cours */}
+            {/* Cours */}
             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
               <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
                 <BookOpen size={18} className="text-blue-600" /> Cours ({TARGET_ACADEMIC_YEAR})
@@ -828,7 +822,7 @@ function StudentProfile() {
               </div>
             </div>
 
-            {/* ✅ QCMs */}
+            {/* QCMs */}
             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
               <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
                 <Zap size={18} className="text-yellow-600" /> QCMs
@@ -879,7 +873,7 @@ function StudentProfile() {
               </div>
             </div>
 
-            {/* ✅ Modules */}
+            {/* Modules */}
             <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
               <h4 className="font-bold text-slate-800 dark:text-white mb-3 flex items-center gap-2">
                 <Award size={18} className="text-purple-600" /> Modules ({TARGET_ACADEMIC_YEAR})
@@ -927,26 +921,26 @@ function StudentProfile() {
           </div>
         </div>
 
-        {/* 🔹 MODAL — Favoris : n'affiche QUE les questions mises en favori pour ce QCM précis */}
-        {selectedQuizForFavorites && (
+        {/* 🔹 MODALE : affiche les questions groupées par QCM (favoris ou notes) */}
+        {modalItems && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-4xl w-full p-6 max-h-[90vh] overflow-y-auto">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-                  {getModuleTitle(selectedQuizForFavorites[0])}
-                  {selectedQuizForFavorites[0]?.year ? ` - ${selectedQuizForFavorites[0].year}` : ''}
-                  {selectedQuizForFavorites[0]?.title ? ` (${selectedQuizForFavorites[0].title})` : ''}
-                </h3>
-                <button onClick={() => setSelectedQuizForFavorites(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded"><X size={24} /></button>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white">{modalTitle}</h3>
+                <button onClick={() => setModalItems(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded"><X size={24} /></button>
               </div>
               <div className="space-y-6">
-                {selectedQuizForFavorites.map((item, idx) => {
+                {modalItems.map((item, idx) => {
                   const q = item.question;
                   return (
-                    <div key={idx} className="p-4 border rounded-lg bg-red-50 border-red-200 dark:bg-red-900/10 dark:border-red-900/30">
+                    <div key={idx} className="p-4 border rounded-lg bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700">
                       <div className="flex items-start justify-between">
                         <p className="font-medium text-slate-800 dark:text-white">Question {item.questionIndex + 1}: {q?.questionText || 'Sans texte'}</p>
-                        <Heart size={16} className="text-red-500 fill-current flex-shrink-0 ml-2" />
+                        {modalType === 'favorite' ? (
+                          <Heart size={16} className="text-red-500 fill-current flex-shrink-0 ml-2" />
+                        ) : (
+                          <StickyNote size={16} className="text-purple-500 flex-shrink-0 ml-2" />
+                        )}
                       </div>
                       <div className="mt-2 space-y-1">
                         {q?.options?.map((opt, oi) => (
@@ -956,43 +950,9 @@ function StudentProfile() {
                         ))}
                       </div>
                       {!q?.correctAnswer && <p className="text-orange-500 text-xs mt-1">Aucune réponse correcte définie.</p>}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 🔹 MODAL — Notes : n'affiche QUE les questions notées pour ce QCM précis */}
-        {selectedQuizForNotes && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-4xl w-full p-6 max-h-[90vh] overflow-y-auto">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-xl font-bold text-slate-900 dark:text-white">
-                  {getModuleTitle(selectedQuizForNotes[0])}
-                  {selectedQuizForNotes[0]?.year ? ` - ${selectedQuizForNotes[0].year}` : ''}
-                  {selectedQuizForNotes[0]?.title ? ` (${selectedQuizForNotes[0].title})` : ''}
-                </h3>
-                <button onClick={() => setSelectedQuizForNotes(null)} className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded"><X size={24} /></button>
-              </div>
-              <div className="space-y-6">
-                {selectedQuizForNotes.map((item, idx) => {
-                  const q = item.question;
-                  return (
-                    <div key={idx} className="p-4 border rounded-lg bg-purple-50 border-purple-200 dark:bg-purple-900/10 dark:border-purple-900/30">
-                      <div className="flex items-start justify-between">
-                        <p className="font-medium text-slate-800 dark:text-white">Question {item.questionIndex + 1}: {q?.questionText || 'Sans texte'}</p>
-                        <StickyNote size={16} className="text-purple-500 flex-shrink-0 ml-2" />
-                      </div>
-                      <div className="mt-2 space-y-1">
-                        {q?.options?.map((opt, oi) => (
-                          <div key={oi} className={`p-1 rounded ${q.correctAnswer === opt ? 'bg-green-100 dark:bg-green-900/30 text-green-700' : ''}`}>
-                            {opt} {q.correctAnswer === opt && '✅'}
-                          </div>
-                        ))}
-                      </div>
-                      <p className="mt-2 text-sm text-purple-700 dark:text-purple-400">📝 {item.noteText}</p>
+                      {modalType === 'note' && item.noteText && (
+                        <p className="mt-2 text-sm text-purple-700 dark:text-purple-400">📝 {item.noteText}</p>
+                      )}
                     </div>
                   );
                 })}
