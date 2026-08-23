@@ -7,20 +7,48 @@ function StudentCourseView() {
 
   const studentYear = user?.year || '1ère Année';
   const [semester, setSemester] = useState('Semestre 1');
-  const [modules, setModules] = useState([]);
-  const [loading, setLoading] = useState(true);
+
+  const CACHE_EXPIRY = 5 * 60 * 1000; // 5 دقائق
+
+  const loadFromCache = (year, sem) => {
+    try {
+      const cached = localStorage.getItem(`course_modules_${year}_${sem}`);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        if (Date.now() - timestamp < CACHE_EXPIRY) return data;
+      }
+    } catch (e) {}
+    return null;
+  };
+
+  const saveToCache = (year, sem, data) => {
+    try {
+      localStorage.setItem(`course_modules_${year}_${sem}`, JSON.stringify({ data, timestamp: Date.now() }));
+    } catch (e) {}
+  };
+
+  // ✅ نبداو مباشرة بالمحتوى المخزن (إذا موجود) بدل شاشة "Chargement..." فارغة
+  const [modules, setModules] = useState(() => loadFromCache(studentYear, semester) || []);
+  const [hasFetchedOnce, setHasFetchedOnce] = useState(() => !!loadFromCache(studentYear, semester));
 
   useEffect(() => {
+    // ✅ كي تتبدل السنة/السوماستر، نبينو المخزن ديالهم فورًا (إذا كاين) بلا ننتظرو
+    const cached = loadFromCache(studentYear, semester);
+    if (cached) {
+      setModules(cached);
+      setHasFetchedOnce(true);
+    }
+
     const fetchModules = async () => {
-      setLoading(true);
       try {
         const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/modules?year=${studentYear}&semester=${semester}`);
         const data = await res.json();
         setModules(data);
+        saveToCache(studentYear, semester, data);
       } catch (err) {
         console.error(err);
       } finally {
-        setLoading(false);
+        setHasFetchedOnce(true);
       }
     };
     fetchModules();
@@ -53,12 +81,12 @@ function StudentCourseView() {
           </div>
         </div>
 
-        {loading ? (
-          <p className="text-center text-slate-500">Chargement des modules...</p>
-        ) : modules.length === 0 ? (
-          <div className="text-center text-slate-500 py-10 bg-white dark:bg-slate-800 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
-            Aucun module trouvé pour votre année et le semestre sélectionnés.
-          </div>
+        {modules.length === 0 ? (
+          hasFetchedOnce ? (
+            <div className="text-center text-slate-500 py-10 bg-white dark:bg-slate-800 rounded-xl border border-dashed border-slate-300 dark:border-slate-700">
+              Aucun module trouvé pour votre année et le semestre sélectionnés.
+            </div>
+          ) : null /* ✅ أول تحميل بلا cache: ما نبينوش رسالة "فارغ" وقتاش لازال الجلب جاري */
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {modules.map((mod) => (
