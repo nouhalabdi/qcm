@@ -1,5 +1,5 @@
 // StudentQuizView.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { Clock, CheckCircle, XCircle, ArrowLeft, ArrowRight, Save, X, FileText, Trophy, Heart, MessageCircle, Maximize2, Minimize2 } from 'lucide-react';
 import ChatWindow from './ChatWindow';
@@ -33,9 +33,9 @@ function StudentQuizView() {
   const [chatConversationId, setChatConversationId] = useState(null);
   const [chatTitle, setChatTitle] = useState('');
 
-  // --- Per-question states ---
-  const [favoriteQuestions, setFavoriteQuestions] = useState({}); // key: questionIndex, value: boolean
-  const [questionNotes, setQuestionNotes] = useState({}); // key: questionIndex, value: note text
+  // حالات لكل سؤال
+  const [favoriteQuestions, setFavoriteQuestions] = useState({});
+  const [questionNotes, setQuestionNotes] = useState({});
   const [activeQuestionNoteIndex, setActiveQuestionNoteIndex] = useState(null);
   const [questionNoteText, setQuestionNoteText] = useState('');
   const [savingNote, setSavingNote] = useState(false);
@@ -43,15 +43,20 @@ function StudentQuizView() {
 
   const [rankingData, setRankingData] = useState(null);
   const [isRankingModalOpen, setIsRankingModalOpen] = useState(false);
-
-  // ✅ FIX: cette state était utilisée (lastTimeTaken / setLastTimeTaken) mais jamais déclarée,
-  // ce qui provoquait un "ReferenceError: setLastTimeTaken is not defined" au chargement en mode
-  // révision/correction, cassant tout l'écran de résultats.
   const [lastTimeTaken, setLastTimeTaken] = useState(0);
-
   const [zoomedImage, setZoomedImage] = useState(null);
 
-  // --- Load quiz and per-question data ---
+  // ✅ دالة تحويل الرابط إلى HTTPS
+  const ensureHttps = (url) => {
+    if (!url) return url;
+    return url.replace(/^http:/, 'https:');
+  };
+
+  // ✅ تثبيت السؤال الحالي
+  const currentQuestion = useMemo(() => {
+    return quiz?.questions?.[currentQuestionIndex] || {};
+  }, [quiz, currentQuestionIndex]);
+
   useEffect(() => {
     const fetchQuiz = async () => {
       try {
@@ -106,7 +111,6 @@ function StudentQuizView() {
     fetchQuiz();
   }, [quizId, user?._id]);
 
-  // Timer
   useEffect(() => {
     if (timeLeft === 0 || isFinished || isReviewMode) return;
     const timer = setInterval(() => {
@@ -122,7 +126,7 @@ function StudentQuizView() {
     return () => clearInterval(timer);
   }, [timeLeft, isFinished, isReviewMode]);
 
-  // --- Per-question favorite toggle ---
+  // ---- دوال لكل سؤال ----
   const toggleFavoriteQuestion = async (index) => {
     if (!user) return;
     const newFav = !favoriteQuestions[index];
@@ -140,11 +144,10 @@ function StudentQuizView() {
     } catch (err) {
       console.error(err);
       alert(err.message);
-      setFavoriteQuestions(prev => ({ ...prev, [index]: !newFav })); // revert
+      setFavoriteQuestions(prev => ({ ...prev, [index]: !newFav }));
     }
   };
 
-  // --- Per-question note ---
   const openQuestionNote = (index) => {
     setActiveQuestionNoteIndex(index);
     setQuestionNoteText(questionNotes[index] || '');
@@ -200,9 +203,6 @@ function StudentQuizView() {
     }
   };
 
-  // --- Chat per question ---
-  // ✅ CHANGEMENT : on passe désormais questionIndex à l'API pour obtenir une conversation
-  // dédiée à CETTE question précise, et non plus une conversation partagée par tout le QCM.
   const openQuestionChat = async (index) => {
     try {
       const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/community/conversations/quiz/${quizId}?questionIndex=${index}`);
@@ -220,7 +220,6 @@ function StudentQuizView() {
     }
   };
 
-  // --- Finish and score ---
   const handleFinish = async () => {
     if (isReviewMode) return;
     let correctCount = 0;
@@ -231,22 +230,14 @@ function StudentQuizView() {
     setIsFinished(true);
 
     let timeSpent = 0;
-    if (startTime) {
-      timeSpent = Math.floor((Date.now() - startTime) / 1000);
-    }
+    if (startTime) timeSpent = Math.floor((Date.now() - startTime) / 1000);
 
     setIsSaving(true);
     try {
       const res = await fetch('https://reussite-qcmss-1nc7.onrender.com/api/users/quiz-result', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          userId: user._id,
-          quizId,
-          type: quiz.type === 'simulation' ? 'module' : quiz.type,
-          score: Math.round((correctCount / quiz.questions.length) * 100),
-          timeTaken: timeSpent
-        })
+        body: JSON.stringify({ userId: user._id, quizId, type: quiz.type === 'simulation' ? 'module' : quiz.type, score: Math.round((correctCount / quiz.questions.length) * 100), timeTaken: timeSpent })
       });
       const data = await res.json();
       console.log('✅ Score enregistré:', data);
@@ -258,14 +249,11 @@ function StudentQuizView() {
     setIsFirstAttempt(false);
   };
 
-  // --- Answer handling ---
   const handleAnswer = (option) => {
     if (isFinished || isReviewMode) return;
     setSelectedAnswers(prev => ({ ...prev, [currentQuestionIndex]: option }));
     const effectiveMode = (quiz.type !== 'lesson' && isPracticeMode) ? 'immediate' : quiz.correctionMode;
-    if (effectiveMode === 'immediate') {
-      setShowExplanation(true);
-    }
+    if (effectiveMode === 'immediate') setShowExplanation(true);
   };
 
   const handleNext = () => {
@@ -273,12 +261,9 @@ function StudentQuizView() {
       if (currentQuestionIndex < quiz.questions.length - 1) {
         setCurrentQuestionIndex(currentQuestionIndex + 1);
       } else {
-        if (returnToFollow) {
-          navigate('/cours', { state: { returnToFollow: true, moduleId: moduleIdFromState } });
-        } else {
-          if (quiz.type === 'simulation') navigate('/simulations');
-          else navigate('/cours');
-        }
+        if (returnToFollow) navigate('/cours', { state: { returnToFollow: true, moduleId: moduleIdFromState } });
+        else if (quiz.type === 'simulation') navigate('/simulations');
+        else navigate('/cours');
       }
       return;
     }
@@ -303,12 +288,9 @@ function StudentQuizView() {
   const handleExit = () => {
     if (isCorrectionOnly) { navigate('/profile'); return; }
     if (!isFinished && !isReviewMode && !window.confirm("Voulez-vous vraiment quitter l'examen ?")) return;
-    if (returnToFollow) {
-      navigate('/cours', { state: { returnToFollow: true, moduleId: moduleIdFromState } });
-    } else {
-      if (quiz.type === 'simulation') navigate('/simulations');
-      else navigate('/cours');
-    }
+    if (returnToFollow) navigate('/cours', { state: { returnToFollow: true, moduleId: moduleIdFromState } });
+    else if (quiz.type === 'simulation') navigate('/simulations');
+    else navigate('/cours');
   };
 
   const handleRetry = () => {
@@ -324,7 +306,6 @@ function StudentQuizView() {
     setIsFirstAttempt(true);
   };
 
-  // --- Ranking ---
   const fetchRanking = async () => {
     try {
       const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/quizzes/${quizId}/ranking`);
@@ -337,13 +318,13 @@ function StudentQuizView() {
     }
   };
 
-  // --- Helpers ---
   const formatTime = (seconds) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
+  // ✅ ImageGallery مع تحويل الروابط إلى HTTPS
   const ImageGallery = ({ images, alt }) => {
     if (!images || images.length === 0) return null;
     return (
@@ -351,13 +332,13 @@ function StudentQuizView() {
         {images.map((url, idx) => (
           <div key={idx} className="relative group">
             <img
-              src={url}
+              src={ensureHttps(url)}
               alt={`${alt} ${idx+1}`}
               className="max-w-[200px] max-h-[150px] object-contain rounded border border-slate-200 dark:border-slate-700 cursor-pointer hover:shadow-lg transition"
-              onClick={() => setZoomedImage(url)}
+              onClick={() => setZoomedImage(ensureHttps(url))}
             />
             <button
-              onClick={() => setZoomedImage(url)}
+              onClick={() => setZoomedImage(ensureHttps(url))}
               className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition"
               title="Agrandir"
             >
@@ -379,7 +360,7 @@ function StudentQuizView() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 p-3 sm:p-6 flex items-center justify-center">
       <div className="w-full max-w-4xl bg-white dark:bg-slate-800 rounded-2xl shadow-lg p-4 sm:p-6 border border-slate-200 dark:border-slate-700 relative">
 
-        {/* --- Header with per-question buttons --- */}
+        {/* Header */}
         <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-100 dark:border-slate-700 flex-wrap gap-2">
           <div>
             <h2 className="text-xl font-bold text-slate-800 dark:text-white">
@@ -392,40 +373,22 @@ function StudentQuizView() {
           </div>
 
           <div className="flex items-center gap-3 flex-wrap">
-            {/* Boutons spécifiques à la question courante */}
             {!isFinished && !isReviewMode && (
               <>
-                <button
-                  onClick={() => toggleFavoriteQuestion(currentQuestionIndex)}
-                  className="p-2 rounded-full transition hover:bg-gray-100 dark:hover:bg-slate-700"
-                  title="Ajouter aux favoris"
-                >
+                <button onClick={() => toggleFavoriteQuestion(currentQuestionIndex)} className="p-2 rounded-full transition hover:bg-gray-100 dark:hover:bg-slate-700" title="Ajouter aux favoris">
                   <Heart size={20} fill={favoriteQuestions[currentQuestionIndex] ? 'red' : 'none'} className={favoriteQuestions[currentQuestionIndex] ? 'text-red-500' : 'text-slate-400'} />
                 </button>
-                <button
-                  onClick={() => openQuestionNote(currentQuestionIndex)}
-                  className="p-2 rounded-full transition hover:bg-gray-100 dark:hover:bg-slate-700"
-                  title="Ajouter une note"
-                >
+                <button onClick={() => openQuestionNote(currentQuestionIndex)} className="p-2 rounded-full transition hover:bg-gray-100 dark:hover:bg-slate-700" title="Ajouter une note">
                   <FileText size={20} className="text-slate-400" />
                 </button>
-                <button
-                  onClick={() => openQuestionChat(currentQuestionIndex)}
-                  className="p-2 rounded-full transition hover:bg-gray-100 dark:hover:bg-slate-700"
-                  title="Discuter de cette question"
-                >
+                <button onClick={() => openQuestionChat(currentQuestionIndex)} className="p-2 rounded-full transition hover:bg-gray-100 dark:hover:bg-slate-700" title="Discuter de cette question">
                   <MessageCircle size={20} className="text-slate-400" />
                 </button>
               </>
             )}
 
             {quiz.type !== 'lesson' && !isFinished && !isReviewMode && (
-              <button
-                onClick={() => setIsPracticeMode(!isPracticeMode)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                  isPracticeMode ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
-                }`}
-              >
+              <button onClick={() => setIsPracticeMode(!isPracticeMode)} className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${isPracticeMode ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}`}>
                 {isPracticeMode ? 'Mode Entraînement' : 'Mode Examen'}
               </button>
             )}
@@ -436,7 +399,7 @@ function StudentQuizView() {
           </div>
         </div>
 
-        {/* --- Content --- */}
+        {/* Contenu */}
         {!isFinished && !isReviewMode ? (
           <div>
             <div className="flex-1">
@@ -449,20 +412,17 @@ function StudentQuizView() {
               </div>
 
               <h3 className="text-lg font-medium text-slate-800 dark:text-white mb-4">
-                {quiz.questions[currentQuestionIndex].questionText}
+                {currentQuestion.questionText}
               </h3>
 
-              <ImageGallery
-                images={quiz.questions[currentQuestionIndex].questionImages}
-                alt="Image de la question"
-              />
+              <ImageGallery images={currentQuestion.questionImages} alt="Image de la question" />
 
               <div className="space-y-3 mt-4">
-                {quiz.questions[currentQuestionIndex].options.map((opt, idx) => {
+                {currentQuestion.options.map((opt, idx) => {
                   let btnClass = "w-full text-left p-3 border rounded-lg bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 transition";
                   const isSelected = selectedAnswers[currentQuestionIndex] === opt;
-                  const hasCorrectAnswer = !!quiz.questions[currentQuestionIndex].correctAnswer;
-                  const isCorrect = hasCorrectAnswer && opt === quiz.questions[currentQuestionIndex].correctAnswer;
+                  const hasCorrectAnswer = !!currentQuestion.correctAnswer;
+                  const isCorrect = hasCorrectAnswer && opt === currentQuestion.correctAnswer;
                   const revealCorrection = effectiveCorrectionMode === 'immediate' && hasCorrectAnswer;
 
                   if (isSelected) {
@@ -495,31 +455,21 @@ function StudentQuizView() {
               {showExplanation && (
                 <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                   <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line">
-                    <span className="font-bold text-blue-600">Explication :</span> {quiz.questions[currentQuestionIndex].explanation || 'Aucune explication fournie.'}
+                    <span className="font-bold text-blue-600">Explication :</span> {currentQuestion.explanation || 'Aucune explication fournie.'}
                   </p>
-                  <ImageGallery
-                    images={quiz.questions[currentQuestionIndex].explanationImages}
-                    alt="Image d'explication"
-                  />
+                  <ImageGallery images={currentQuestion.explanationImages} alt="Image d'explication" />
                 </div>
               )}
 
               {selectedAnswers[currentQuestionIndex] !== undefined && (
-                <button
-                  onClick={handleNext}
-                  className="mt-4 w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow transition flex items-center justify-center gap-2"
-                >
+                <button onClick={handleNext} className="mt-4 w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow transition flex items-center justify-center gap-2">
                   {currentQuestionIndex === totalQuestions - 1 ? 'Terminer l\'examen' : 'Suivant'}
                 </button>
               )}
 
               <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-700">
                 <div className="flex items-center justify-center gap-4">
-                  <button
-                    onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))}
-                    disabled={currentQuestionIndex === 0}
-                    className="w-10 h-10 flex-shrink-0 rounded-full bg-blue-500 hover:bg-blue-600 disabled:opacity-30 disabled:cursor-not-allowed text-white flex items-center justify-center shadow transition"
-                  >
+                  <button onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))} disabled={currentQuestionIndex === 0} className="w-10 h-10 flex-shrink-0 rounded-full bg-blue-500 hover:bg-blue-600 disabled:opacity-30 disabled:cursor-not-allowed text-white flex items-center justify-center shadow transition">
                     <ArrowLeft size={18} />
                   </button>
 
@@ -541,11 +491,7 @@ function StudentQuizView() {
                       [&::-moz-range-thumb]:bg-blue-500 [&::-moz-range-thumb]:border-2 [&::-moz-range-thumb]:border-white [&::-moz-range-thumb]:cursor-pointer"
                   />
 
-                  <button
-                    onClick={() => setCurrentQuestionIndex(prev => Math.min(totalQuestions - 1, prev + 1))}
-                    disabled={currentQuestionIndex === totalQuestions - 1}
-                    className="w-10 h-10 flex-shrink-0 rounded-full bg-blue-500 hover:bg-blue-600 disabled:opacity-30 disabled:cursor-not-allowed text-white flex items-center justify-center shadow transition"
-                  >
+                  <button onClick={() => setCurrentQuestionIndex(prev => Math.min(totalQuestions - 1, prev + 1))} disabled={currentQuestionIndex === totalQuestions - 1} className="w-10 h-10 flex-shrink-0 rounded-full bg-blue-500 hover:bg-blue-600 disabled:opacity-30 disabled:cursor-not-allowed text-white flex items-center justify-center shadow transition">
                     <ArrowRight size={18} />
                   </button>
                 </div>
@@ -556,7 +502,7 @@ function StudentQuizView() {
             </div>
           </div>
         ) : (
-          // --- Correction / Finish screen ---
+          // ---- شاشة التصحيح ----
           <div className="text-center py-6">
             <h2 className="text-3xl font-bold text-slate-800 dark:text-white mb-2">
               {isCorrectionOnly ? 'Correction du QCM (Favori)' : isReviewMode ? 'Révision - Examen terminé !' : 'Examen terminé !'}
@@ -617,13 +563,13 @@ function StudentQuizView() {
                         {q.explanationImages.map((url, i) => (
                           <div key={i} className="relative group">
                             <img
-                              src={url}
+                              src={ensureHttps(url)}
                               alt={`explication ${i+1}`}
                               className="max-w-[150px] max-h-[120px] object-contain rounded border border-slate-200 dark:border-slate-600 cursor-pointer hover:shadow-lg transition"
-                              onClick={() => setZoomedImage(url)}
+                              onClick={() => setZoomedImage(ensureHttps(url))}
                             />
                             <button
-                              onClick={() => setZoomedImage(url)}
+                              onClick={() => setZoomedImage(ensureHttps(url))}
                               className="absolute top-1 right-1 bg-black/50 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition"
                               title="Agrandir"
                             >
@@ -646,11 +592,8 @@ function StudentQuizView() {
               )}
               <button
                 onClick={() => {
-                  if (returnToFollow) {
-                    navigate('/cours', { state: { returnToFollow: true, moduleId: moduleIdFromState } });
-                  } else {
-                    navigate(isCorrectionOnly ? '/profile' : (quiz.type === 'simulation' ? '/simulations' : '/cours'));
-                  }
+                  if (returnToFollow) navigate('/cours', { state: { returnToFollow: true, moduleId: moduleIdFromState } });
+                  else navigate(isCorrectionOnly ? '/profile' : (quiz.type === 'simulation' ? '/simulations' : '/cours'));
                 }}
                 className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow transition"
               >
@@ -665,8 +608,7 @@ function StudentQuizView() {
           </div>
         )}
 
-        {/* --- Modales --- */}
-        {/* Note modal per question */}
+        {/* Modal note */}
         {noteModalOpen && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col">
@@ -690,7 +632,6 @@ function StudentQuizView() {
           </div>
         )}
 
-        {/* Ranking modal (unchanged) */}
         {isRankingModalOpen && rankingData && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-3xl w-full p-6 max-h-[80vh] overflow-y-auto">
@@ -747,17 +688,10 @@ function StudentQuizView() {
           <div className="fixed inset-0 bg-black/80 z-[9999] flex items-center justify-center p-4" onClick={() => setZoomedImage(null)}>
             <div className="relative max-w-4xl max-h-[90vh] flex items-center justify-center" onClick={(e) => e.stopPropagation()}>
               <img src={zoomedImage} alt="Agrandissement" className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" />
-              <button
-                onClick={() => setZoomedImage(null)}
-                className="absolute top-4 right-4 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 transition"
-                title="Fermer"
-              >
+              <button onClick={() => setZoomedImage(null)} className="absolute top-4 right-4 p-2 bg-black/50 text-white rounded-full hover:bg-black/70 transition" title="Fermer">
                 <X size={24} />
               </button>
-              <button
-                onClick={() => setZoomedImage(null)}
-                className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition text-sm"
-              >
+              <button onClick={() => setZoomedImage(null)} className="absolute bottom-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-white/20 text-white rounded-lg hover:bg-white/30 transition text-sm">
                 Fermer
               </button>
             </div>
