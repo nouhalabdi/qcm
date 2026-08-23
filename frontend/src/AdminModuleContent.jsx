@@ -15,6 +15,12 @@ const ALL_YEARS = generateYears();
 
 const INPUT_CLASS = "p-2 border rounded bg-gray-50 dark:bg-slate-900 border-gray-300 dark:border-slate-600 text-slate-800 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 outline-none transition";
 
+// ✅ دالة تحويل الرابط إلى HTTPS
+const ensureHttps = (url) => {
+  if (!url) return url;
+  return url.replace(/^http:/, 'https:');
+};
+
 // ---------- Composant FileList ----------
 const FileList = ({ items, onRemove, onRename }) => {
   return items.length > 0 ? (
@@ -213,7 +219,7 @@ const QuestionsBuilder = ({ questions, onChange, uploadFile }) => {
     const urls = [];
     for (const file of files) {
       const url = await uploadFile(file);
-      if (url) urls.push(url);
+      if (url) urls.push(ensureHttps(url)); // ✅ تحويل للـ HTTPS
     }
     const updated = [...questions];
     updated[qIndex] = { ...updated[qIndex], questionImages: [...(updated[qIndex].questionImages || []), ...urls] };
@@ -230,7 +236,7 @@ const QuestionsBuilder = ({ questions, onChange, uploadFile }) => {
     const urls = [];
     for (const file of files) {
       const url = await uploadFile(file);
-      if (url) urls.push(url);
+      if (url) urls.push(ensureHttps(url)); // ✅ تحويل للـ HTTPS
     }
     const updated = [...questions];
     updated[qIndex] = { ...updated[qIndex], explanationImages: [...(updated[qIndex].explanationImages || []), ...urls] };
@@ -241,6 +247,21 @@ const QuestionsBuilder = ({ questions, onChange, uploadFile }) => {
     const updated = [...questions];
     updated[qIndex] = { ...updated[qIndex], explanationImages: updated[qIndex].explanationImages.filter(u => u !== url) };
     onChange(updated);
+  };
+
+  // ✅ عند عرض الصور نستخدم ensureHttps
+  const renderImages = (images, qIndex, removeFunction) => {
+    if (!images || images.length === 0) return null;
+    return (
+      <div className="flex flex-wrap gap-2 mt-2">
+        {images.map((url, i) => (
+          <div key={i} className="relative">
+            <img src={ensureHttps(url)} alt={`image ${i + 1}`} className="w-16 h-16 object-cover rounded border border-gray-300 dark:border-slate-600" />
+            <button type="button" onClick={() => removeFunction(qIndex, url)} className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-4 h-4 text-[10px] flex items-center justify-center leading-none">✕</button>
+          </div>
+        ))}
+      </div>
+    );
   };
 
   return (
@@ -280,16 +301,7 @@ const QuestionsBuilder = ({ questions, onChange, uploadFile }) => {
                 e.target.value = '';
               }}
             />
-            {(q.questionImages || []).length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
-                {q.questionImages.map((url, i) => (
-                  <div key={i} className="relative">
-                    <img src={url} alt={`question ${i + 1}`} className="w-16 h-16 object-cover rounded border border-gray-300 dark:border-slate-600" />
-                    <button type="button" onClick={() => removeQuestionImage(qIndex, url)} className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-4 h-4 text-[10px] flex items-center justify-center leading-none">✕</button>
-                  </div>
-                ))}
-              </div>
-            )}
+            {renderImages(q.questionImages, qIndex, removeQuestionImage)}
           </div>
 
           <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">Coche la bonne réponse :</p>
@@ -342,16 +354,7 @@ const QuestionsBuilder = ({ questions, onChange, uploadFile }) => {
                 e.target.value = '';
               }}
             />
-            {(q.explanationImages || []).length > 0 && (
-              <div className="flex flex-wrap gap-2 mt-2">
-                {q.explanationImages.map((url, i) => (
-                  <div key={i} className="relative">
-                    <img src={url} alt={`explication ${i + 1}`} className="w-16 h-16 object-cover rounded border border-gray-300 dark:border-slate-600" />
-                    <button type="button" onClick={() => removeExplanationImage(qIndex, url)} className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-4 h-4 text-[10px] flex items-center justify-center leading-none">✕</button>
-                  </div>
-                ))}
-              </div>
-            )}
+            {renderImages(q.explanationImages, qIndex, removeExplanationImage)}
           </div>
         </div>
       ))}
@@ -395,7 +398,7 @@ const JsonImportBox = ({ onImport }) => {
             correct = q.correctAnswer;
           }
           if (q.question && Array.isArray(q.options)) {
-            const images = Array.isArray(q.photo) ? q.photo : (q.photo ? [q.photo] : []);
+            const images = Array.isArray(q.photo) ? q.photo.map(img => ensureHttps(img)) : (q.photo ? [ensureHttps(q.photo)] : []);
             allQuestions.push({
               questionText: q.question,
               options: [...q.options],
@@ -416,7 +419,7 @@ const JsonImportBox = ({ onImport }) => {
           correct = q.correctAnswer;
         }
         if (q.question && Array.isArray(q.options)) {
-          const images = Array.isArray(q.photo) ? q.photo : (q.photo ? [q.photo] : []);
+          const images = Array.isArray(q.photo) ? q.photo.map(img => ensureHttps(img)) : (q.photo ? [ensureHttps(q.photo)] : []);
           allQuestions.push({
             questionText: q.question,
             options: [...q.options],
@@ -465,12 +468,12 @@ const JsonImportBox = ({ onImport }) => {
   );
 };
 
-// ---------- QuizModal (avec modifications pour enlever l'année pour lesson) ----------
+// ---------- QuizModal ----------
 const blankQuiz = (type) => ({
   _id: null,
   type,
   title: '',
-  year: type === 'lesson' ? '' : ALL_YEARS[0], // Pour lesson, on laisse vide
+  year: type === 'lesson' ? '' : ALL_YEARS[0],
   durationMinutes: 20,
   authorName: '',
   correctionMode: type === 'lesson' ? 'immediate' : 'deferred',
@@ -527,7 +530,7 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
     if (type === 'lesson') {
       fresh.lessonId = targetId;
       fresh.moduleId = moduleIdProp;
-      fresh.year = ''; // pas de year pour lesson
+      fresh.year = '';
     } else if (type === 'module') {
       fresh.moduleId = targetId;
       fresh.year = ALL_YEARS[0];
@@ -608,7 +611,6 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
                     {quiz.isIA ? (
                       <span className="text-xs bg-purple-200 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400 px-1.5 py-0.5 rounded mr-1">🤖 QCM IA</span>
                     ) : (
-                      // Affichage : pour lesson, on met le titre ; pour module, on met année + titre entre parenthèses
                       type === 'lesson' ? (
                         `${quiz.title || 'QCM Normal'}`
                       ) : (
@@ -644,7 +646,6 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
                 <input type="text" placeholder="Ex: Révision anatomie" className={`w-full ${INPUT_CLASS}`} value={editingQuiz.title || ''} onChange={(e) => setEditingQuiz({ ...editingQuiz, title: e.target.value })} />
               </div>
 
-              {/* ✅ Pour lesson, on cache complètement le champ année */}
               {type !== 'lesson' && (
                 <div>
                   <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">Année</label>
@@ -668,7 +669,6 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
               </div>
             </div>
 
-            {/* ✅ Pour lesson : on ajoute deux boutons "QCM Normal" et "QCM IA" */}
             {type === 'lesson' && (
               <div className="flex flex-wrap items-center gap-4 border-t border-gray-200 dark:border-slate-700 pt-4 mt-2">
                 <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Type :</span>
@@ -707,7 +707,7 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
   );
 };
 
-// ---------- Composant principal AdminModuleContent (inchangé) ----------
+// ---------- Composant principal AdminModuleContent ----------
 function AdminModuleContent() {
   const { moduleId } = useParams();
   const [moduleTitle, setModuleTitle] = useState('');
@@ -743,7 +743,7 @@ function AdminModuleContent() {
         return '';
       }
       const data = await res.json();
-      return data.url;
+      return ensureHttps(data.url); // ✅ تحويل الرابط للـ HTTPS
     } catch (err) {
       console.error(err);
       alert('Erreur réseau.');
@@ -821,7 +821,7 @@ function AdminModuleContent() {
       let defaultName = file.name.replace(/\.[^/.]+$/, "");
       const customName = prompt(`Nom pour "${file.name}" :`, defaultName);
       if (customName !== null) defaultName = customName.trim() || defaultName;
-      newItems.push({ url, name: defaultName });
+      newItems.push({ url: ensureHttps(url), name: defaultName });
     }
     if (newItems.length === 0) return;
     setForm(prev => {
@@ -914,7 +914,7 @@ function AdminModuleContent() {
       let defaultName = file.name.replace(/\.[^/.]+$/, "");
       const customName = prompt(`Nom pour "${file.name}" :`, defaultName);
       if (customName !== null) defaultName = customName.trim() || defaultName;
-      newItems.push({ url, name: defaultName });
+      newItems.push({ url: ensureHttps(url), name: defaultName });
     }
     if (newItems.length > 0) {
       setEditForm(prev => {
@@ -994,19 +994,19 @@ function AdminModuleContent() {
     }
   };
 
-  // ---- Affichage des liens ----
+  // ---- Affichage des liens (مع تحويل الروابط إلى https) ----
   const renderVersionLinks = (v) => (
     <div key={v.language} className="flex flex-wrap items-center justify-between gap-2 text-sm border-b border-blue-100 dark:border-slate-700 pb-2 mb-2 last:border-0 last:pb-0 last:mb-0">
       <span className="font-medium text-slate-600 dark:text-slate-300">{v.language === 'fr' ? '🇫🇷 FR' : '🇬🇧 EN'}</span>
       <div className="flex flex-wrap gap-2">
-        {v.pdf?.map((item, i) => <a key={i} href={item.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-red-50 text-red-600 hover:bg-red-100 rounded dark:bg-red-900/20 dark:text-red-400"><FileText size={14} /> {item.name || `Cours ${i+1}`}</a>)}
-        {v.video?.map((item, i) => <a key={i} href={item.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 rounded dark:bg-blue-900/20 dark:text-blue-400"><Video size={14} /> {item.name || `Vidéo ${i+1}`}</a>)}
-        {v.summary?.map((item, i) => <a key={i} href={item.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-green-50 text-green-600 hover:bg-green-100 rounded dark:bg-green-900/20 dark:text-green-400"><BookOpen size={14} /> {item.name || `Résumé ${i+1}`}</a>)}
-        {v.td?.map((item, i) => <a key={i} href={item.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-orange-50 text-orange-600 hover:bg-orange-100 rounded dark:bg-orange-900/20 dark:text-orange-400"><FileText size={14} /> {item.name || `TD ${i+1}`}</a>)}
-        {v.correction?.map((item, i) => <a key={i} href={item.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-purple-50 text-purple-600 hover:bg-purple-100 rounded dark:bg-purple-900/20 dark:text-purple-400"><FileText size={14} /> {item.name || `Corr. TD ${i+1}`}</a>)}
-        {v.other?.map((item, i) => <a key={i} href={item.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-gray-200 text-gray-600 hover:bg-gray-300 rounded dark:bg-gray-700 dark:text-gray-400"><FileText size={14} /> {item.name || `Autre ${i+1}`}</a>)}
-        {v.ai?.map((item, i) => <a key={i} href={item.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-purple-200 text-purple-600 hover:bg-purple-300 rounded dark:bg-purple-900/30 dark:text-purple-400"><Video size={14} /> {item.name || `IA ${i+1}`}</a>)}
-        {v.aiSummary?.map((item, i) => <a key={i} href={item.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-indigo-100 text-indigo-700 hover:bg-indigo-200 rounded dark:bg-indigo-900/30 dark:text-indigo-400"><BookOpen size={14} /> {item.name || `Résumé IA ${i+1}`}</a>)}
+        {v.pdf?.map((item, i) => <a key={i} href={ensureHttps(item.url)} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-red-50 text-red-600 hover:bg-red-100 rounded dark:bg-red-900/20 dark:text-red-400"><FileText size={14} /> {item.name || `Cours ${i+1}`}</a>)}
+        {v.video?.map((item, i) => <a key={i} href={ensureHttps(item.url)} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 rounded dark:bg-blue-900/20 dark:text-blue-400"><Video size={14} /> {item.name || `Vidéo ${i+1}`}</a>)}
+        {v.summary?.map((item, i) => <a key={i} href={ensureHttps(item.url)} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-green-50 text-green-600 hover:bg-green-100 rounded dark:bg-green-900/20 dark:text-green-400"><BookOpen size={14} /> {item.name || `Résumé ${i+1}`}</a>)}
+        {v.td?.map((item, i) => <a key={i} href={ensureHttps(item.url)} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-orange-50 text-orange-600 hover:bg-orange-100 rounded dark:bg-orange-900/20 dark:text-orange-400"><FileText size={14} /> {item.name || `TD ${i+1}`}</a>)}
+        {v.correction?.map((item, i) => <a key={i} href={ensureHttps(item.url)} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-purple-50 text-purple-600 hover:bg-purple-100 rounded dark:bg-purple-900/20 dark:text-purple-400"><FileText size={14} /> {item.name || `Corr. TD ${i+1}`}</a>)}
+        {v.other?.map((item, i) => <a key={i} href={ensureHttps(item.url)} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-gray-200 text-gray-600 hover:bg-gray-300 rounded dark:bg-gray-700 dark:text-gray-400"><FileText size={14} /> {item.name || `Autre ${i+1}`}</a>)}
+        {v.ai?.map((item, i) => <a key={i} href={ensureHttps(item.url)} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-purple-200 text-purple-600 hover:bg-purple-300 rounded dark:bg-purple-900/30 dark:text-purple-400"><Video size={14} /> {item.name || `IA ${i+1}`}</a>)}
+        {v.aiSummary?.map((item, i) => <a key={i} href={ensureHttps(item.url)} target="_blank" rel="noreferrer" className="flex items-center gap-1 p-1 text-xs bg-indigo-100 text-indigo-700 hover:bg-indigo-200 rounded dark:bg-indigo-900/30 dark:text-indigo-400"><BookOpen size={14} /> {item.name || `Résumé IA ${i+1}`}</a>)}
       </div>
     </div>
   );
