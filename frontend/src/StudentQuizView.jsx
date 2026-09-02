@@ -17,7 +17,7 @@ function StudentQuizView() {
   const [quiz, setQuiz] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [selectedAnswers, setSelectedAnswers] = useState({}); // لكل سؤال: مصفوفة من الخيارات المختارة
+  const [selectedAnswers, setSelectedAnswers] = useState({});
   const [answeredQuestions, setAnsweredQuestions] = useState(new Set());
   const [score, setScore] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
@@ -45,13 +45,11 @@ function StudentQuizView() {
   const [lastTimeTaken, setLastTimeTaken] = useState(0);
   const [zoomedImage, setZoomedImage] = useState(null);
 
-  // دالة تحويل الرابط إلى HTTPS
   const ensureHttps = (url) => {
     if (!url) return url;
     return url.replace(/^http:/, 'https:');
   };
 
-  // استخراج الإجابات الصحيحة كمصفوفة (للتكيف مع صيغة correctAnswer أو correctAnswers)
   const getCorrectAnswers = (question) => {
     if (question.correctAnswers && Array.isArray(question.correctAnswers)) {
       return question.correctAnswers.filter(ans => ans && ans.trim() !== '');
@@ -91,7 +89,6 @@ function StudentQuizView() {
             setLastTimeTaken(last.timeTaken || 0);
           }
         }
-        // Load per-question favorites and notes
         const questionDataRes = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/users/question-data?userId=${user?._id}&quizId=${quizId}`);
         if (questionDataRes.ok) {
           const questionData = await questionDataRes.json();
@@ -232,22 +229,20 @@ function StudentQuizView() {
   // ---- تأكيد الإجابات المختارة ----
   const confirmAnswer = () => {
     if (isFinished || isReviewMode) return;
-    // لا يسمح بالتأكيد إذا لم يتم اختيار أي خيار
     const selected = selectedAnswers[currentQuestionIndex] || [];
     if (selected.length === 0) {
       alert('Veuillez sélectionner au moins une réponse.');
       return;
     }
-    const effectiveMode = (quiz.type !== 'lesson' && isPracticeMode) ? 'immediate' : quiz.correctionMode;
-    if (effectiveMode === 'immediate') {
-      // في التصحيح الفوري، نحسب النتيجة فوراً و نظهر التصحيح
-      setShowExplanation(true);
-    }
+    // Marquer le questionnaire comme confirmé (affiche le bouton Suivant)
+    setShowExplanation(true);
+    // Si le mode est immédiat, on calcule la réponse tout de suite (dans handleNext on fera le calcul)
+    // mais pour éviter de recalculer à chaque fois, on pourrait le faire ici, mais on le fera dans handleNext pour uniformité
   };
 
   // ---- معالجة اختيار خيار (تحديد / إلغاء تحديد) ----
   const handleOptionToggle = (option) => {
-    if (isFinished || isReviewMode || showExplanation) return;
+    if (isFinished || isReviewMode || showExplanation) return; // bloqué après confirmation
     const currentSelected = selectedAnswers[currentQuestionIndex] || [];
     const newSelected = currentSelected.includes(option)
       ? currentSelected.filter(o => o !== option)
@@ -258,7 +253,7 @@ function StudentQuizView() {
     }));
   };
 
-  // ---- الانتقال للسؤال التالي بعد التصحيح (واضح أننا نضغط "التالي") ----
+  // ---- الانتقال للسؤال التالي ----
   const handleNext = () => {
     if (isReviewMode) {
       if (currentQuestionIndex < quiz.questions.length - 1) {
@@ -271,24 +266,25 @@ function StudentQuizView() {
       return;
     }
 
-    // في وضع التصحيح الفوري، نتحقق من أن السؤال قد تم التأكيد عليه
+    // التأكد من أن السؤال قد تم تأكيده
+    if (!showExplanation) {
+      alert('Veuillez confirmer vos réponses d\'abord.');
+      return;
+    }
+
+    // في حالة التصحيح الفوري، نحسب النتيجة للسؤال الحالي إذا لم يكن محسوباً من قبل
     const effectiveMode = (quiz.type !== 'lesson' && isPracticeMode) ? 'immediate' : quiz.correctionMode;
     if (effectiveMode === 'immediate') {
-      if (!showExplanation) {
-        alert('Veuillez confirmer vos réponses d\'abord.');
-        return;
-      }
-      // نضيف السؤال إلى المجموعة التي تم الإجابة عليها (إذا لم يسبق)
       if (!answeredQuestions.has(currentQuestionIndex)) {
         const corrects = getCorrectAnswers(currentQuestion);
         const selected = selectedAnswers[currentQuestionIndex] || [];
-        // نقارن المجموعتين: صحيح إذا كانت كل الإجابات المختارة صحيحة وكل الإجابات الصحيحة مختارة
         const isCorrect = selected.length === corrects.length && selected.every(ans => corrects.includes(ans));
         if (isCorrect) setScore(prev => prev + 1);
         setAnsweredQuestions(prev => new Set(prev.add(currentQuestionIndex)));
       }
     }
 
+    // إعادة ضبط showExplanation للسؤال التالي
     setShowExplanation(false);
     if (currentQuestionIndex < quiz.questions.length - 1) {
       setCurrentQuestionIndex(currentQuestionIndex + 1);
@@ -303,7 +299,6 @@ function StudentQuizView() {
     quiz.questions.forEach((q, idx) => {
       const corrects = getCorrectAnswers(q);
       const selected = selectedAnswers[idx] || [];
-      // صحيح فقط إذا تطابق المجموعتان تماماً
       const isCorrect = selected.length === corrects.length && selected.every(ans => corrects.includes(ans));
       if (isCorrect) correctCount++;
     });
@@ -497,7 +492,7 @@ function StudentQuizView() {
                 })}
               </div>
 
-              {/* زر تأكيد الإجابات (صغير) يظهر فقط إذا لم يتم عرض التصحيح بعد ولم يتم الانتهاء */}
+              {/* زر تأكيد الإجابات (يظهر فقط إذا لم يتم التأكيد بعد) */}
               {!showExplanation && !isFinished && (
                 <div className="mt-3 flex justify-center">
                   <button
@@ -509,7 +504,8 @@ function StudentQuizView() {
                 </div>
               )}
 
-              {showExplanation && (
+              {/* عرض التصحيح فقط في الوضع الفوري وبعد التأكيد */}
+              {showExplanation && effectiveCorrectionMode === 'immediate' && (
                 <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                   <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line">
                     <span className="font-bold text-blue-600">Explication :</span> {currentQuestion.explanation || 'Aucune explication fournie.'}
@@ -518,6 +514,7 @@ function StudentQuizView() {
                 </div>
               )}
 
+              {/* زر "Suivant" يظهر بعد التأكيد (بغض النظر عن الوضع) */}
               {showExplanation && (
                 <button onClick={handleNext} className="mt-4 w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow transition flex items-center justify-center gap-2">
                   {currentQuestionIndex === totalQuestions - 1 ? 'Terminer l\'examen' : 'Suivant'}
