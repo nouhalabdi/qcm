@@ -174,7 +174,8 @@ const YearFilesBlock = ({ year, versions, onAddFiles, onRemoveFile, onRenameFile
 const emptyQuestion = () => ({
   questionText: '',
   options: ['', ''],
-  correctAnswer: '',
+  correctAnswers: [], // 🔹 مصفوفة الإجابات الصحيحة
+  correctAnswer: '', // 🔹 للتوافق مع الإصدار القديم
   explanation: '',
   explanationImages: [],
   questionImages: []
@@ -192,8 +193,11 @@ const QuestionsBuilder = ({ questions, onChange, uploadFile }) => {
     const oldVal = updated[qIndex].options[oIndex];
     const options = [...updated[qIndex].options];
     options[oIndex] = value;
+    const correctAnswers = updated[qIndex].correctAnswers || [];
     const correctAnswer = updated[qIndex].correctAnswer === oldVal ? value : updated[qIndex].correctAnswer;
-    updated[qIndex] = { ...updated[qIndex], options, correctAnswer };
+    // تصحيح الإجابات الصحيحة إذا تغيّرت الخيارات
+    const newCorrectAnswers = correctAnswers.map(ans => ans === oldVal ? value : ans);
+    updated[qIndex] = { ...updated[qIndex], options, correctAnswer, correctAnswers: newCorrectAnswers };
     onChange(updated);
   };
 
@@ -207,19 +211,36 @@ const QuestionsBuilder = ({ questions, onChange, uploadFile }) => {
     const updated = [...questions];
     const removedVal = updated[qIndex].options[oIndex];
     const options = updated[qIndex].options.filter((_, i) => i !== oIndex);
+    const correctAnswers = (updated[qIndex].correctAnswers || []).filter(ans => ans !== removedVal);
     const correctAnswer = updated[qIndex].correctAnswer === removedVal ? '' : updated[qIndex].correctAnswer;
-    updated[qIndex] = { ...updated[qIndex], options, correctAnswer };
+    updated[qIndex] = { ...updated[qIndex], options, correctAnswer, correctAnswers };
     onChange(updated);
   };
 
   const addQuestion = () => onChange([...questions, emptyQuestion()]);
   const removeQuestion = (qIndex) => onChange(questions.filter((_, i) => i !== qIndex));
 
+  // 🔹 دالة تبديل الإجابات الصحيحة
+  const toggleCorrectAnswer = (qIndex, option) => {
+    const updated = [...questions];
+    const currentAnswers = updated[qIndex].correctAnswers || [];
+    let newAnswers;
+    if (currentAnswers.includes(option)) {
+      newAnswers = currentAnswers.filter(a => a !== option);
+    } else {
+      newAnswers = [...currentAnswers, option];
+    }
+    updated[qIndex] = { ...updated[qIndex], correctAnswers: newAnswers };
+    // إذا كانت هناك إجابة واحدة فقط، نحدّث حقل correctAnswer للتوافق
+    updated[qIndex].correctAnswer = newAnswers.length === 1 ? newAnswers[0] : '';
+    onChange(updated);
+  };
+
   const addQuestionImages = async (qIndex, files) => {
     const urls = [];
     for (const file of files) {
       const url = await uploadFile(file);
-      if (url) urls.push(ensureHttps(url)); // ✅ تحويل للـ HTTPS
+      if (url) urls.push(ensureHttps(url));
     }
     const updated = [...questions];
     updated[qIndex] = { ...updated[qIndex], questionImages: [...(updated[qIndex].questionImages || []), ...urls] };
@@ -236,7 +257,7 @@ const QuestionsBuilder = ({ questions, onChange, uploadFile }) => {
     const urls = [];
     for (const file of files) {
       const url = await uploadFile(file);
-      if (url) urls.push(ensureHttps(url)); // ✅ تحويل للـ HTTPS
+      if (url) urls.push(ensureHttps(url));
     }
     const updated = [...questions];
     updated[qIndex] = { ...updated[qIndex], explanationImages: [...(updated[qIndex].explanationImages || []), ...urls] };
@@ -249,7 +270,6 @@ const QuestionsBuilder = ({ questions, onChange, uploadFile }) => {
     onChange(updated);
   };
 
-  // ✅ عند عرض الصور نستخدم ensureHttps
   const renderImages = (images, qIndex, removeFunction) => {
     if (!images || images.length === 0) return null;
     return (
@@ -304,15 +324,14 @@ const QuestionsBuilder = ({ questions, onChange, uploadFile }) => {
             {renderImages(q.questionImages, qIndex, removeQuestionImage)}
           </div>
 
-          <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">Coche la bonne réponse :</p>
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-1">Cochez la/les bonne(s) réponse(s) :</p>
           <div className="space-y-2 mb-3">
             {q.options.map((opt, oIndex) => (
               <div key={oIndex} className="flex items-center gap-2">
                 <input
-                  type="radio"
-                  name={`correct-${qIndex}`}
-                  checked={q.correctAnswer !== '' && q.correctAnswer === opt}
-                  onChange={() => updateQuestion(qIndex, 'correctAnswer', opt)}
+                  type="checkbox"
+                  checked={(q.correctAnswers || []).includes(opt)}
+                  onChange={() => toggleCorrectAnswer(qIndex, opt)}
                   className="flex-shrink-0"
                 />
                 <input
@@ -391,18 +410,21 @@ const JsonImportBox = ({ onImport }) => {
       for (const yearBlock of parsed) {
         if (!Array.isArray(yearBlock.questions)) continue;
         for (const q of yearBlock.questions) {
-          let correct = '';
-          if (q.correctAnswers && Array.isArray(q.correctAnswers) && q.correctAnswers.length > 0 && q.correctAnswers[0] !== '') {
-            correct = q.correctAnswers[0];
+          // 🔹 استخراج الإجابات الصحيحة المتعددة
+          let correctAnswers = [];
+          if (Array.isArray(q.correctAnswers)) {
+            correctAnswers = q.correctAnswers.filter(ans => ans !== '');
           } else if (q.correctAnswer && q.correctAnswer !== '') {
-            correct = q.correctAnswer;
+            correctAnswers = [q.correctAnswer];
           }
+          // إذا كانت الإجابات موجودة في مصفوفة correctAnswers
           if (q.question && Array.isArray(q.options)) {
             const images = Array.isArray(q.photo) ? q.photo.map(img => ensureHttps(img)) : (q.photo ? [ensureHttps(q.photo)] : []);
             allQuestions.push({
               questionText: q.question,
               options: [...q.options],
-              correctAnswer: correct,
+              correctAnswers: correctAnswers,
+              correctAnswer: correctAnswers.length === 1 ? correctAnswers[0] : '',
               explanation: q.solutionText || '',
               explanationImages: images,
               questionImages: []
@@ -412,18 +434,19 @@ const JsonImportBox = ({ onImport }) => {
       }
     } else if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].question) {
       for (const q of parsed) {
-        let correct = '';
-        if (q.correctAnswers && Array.isArray(q.correctAnswers) && q.correctAnswers.length > 0 && q.correctAnswers[0] !== '') {
-          correct = q.correctAnswers[0];
+        let correctAnswers = [];
+        if (Array.isArray(q.correctAnswers)) {
+          correctAnswers = q.correctAnswers.filter(ans => ans !== '');
         } else if (q.correctAnswer && q.correctAnswer !== '') {
-          correct = q.correctAnswer;
+          correctAnswers = [q.correctAnswer];
         }
         if (q.question && Array.isArray(q.options)) {
           const images = Array.isArray(q.photo) ? q.photo.map(img => ensureHttps(img)) : (q.photo ? [ensureHttps(q.photo)] : []);
           allQuestions.push({
             questionText: q.question,
             options: [...q.options],
-            correctAnswer: correct,
+            correctAnswers: correctAnswers,
+            correctAnswer: correctAnswers.length === 1 ? correctAnswers[0] : '',
             explanation: q.solutionText || q.explanation || '',
             explanationImages: images,
             questionImages: []
@@ -454,7 +477,7 @@ const JsonImportBox = ({ onImport }) => {
       {showBox && (
         <div className="mt-3 space-y-3">
           <p className="text-xs text-slate-500 dark:text-slate-400">Colle un tableau JSON (questions ou années).</p>
-          <textarea rows="8" className={`w-full text-xs font-mono ${INPUT_CLASS}`} placeholder='[{ "question": "...", "options": ["A", "B"], "correctAnswer": "A" }]' value={jsonText} onChange={(e) => setJsonText(e.target.value)} />
+          <textarea rows="8" className={`w-full text-xs font-mono ${INPUT_CLASS}`} placeholder='[{ "question": "...", "options": ["A", "B"], "correctAnswers": ["A", "B"] }]' value={jsonText} onChange={(e) => setJsonText(e.target.value)} />
           {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
           {questionCount > 0 && !error && (
             <p className="text-xs text-green-600 dark:text-green-400 flex items-center gap-1">
@@ -540,7 +563,13 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
   };
 
   const openEditBuilder = (quiz) => {
-    setEditingQuiz({ ...quiz, questions: quiz.questions.map(q => ({ ...q, options: [...q.options], explanationImages: [...(q.explanationImages || [])], questionImages: [...(q.questionImages || [])] })) });
+    // تأكد من أن كل سؤال يحتوي على correctAnswers
+    const normalizedQuestions = quiz.questions.map(q => ({
+      ...q,
+      correctAnswers: q.correctAnswers || (q.correctAnswer ? [q.correctAnswer] : []),
+      correctAnswer: q.correctAnswer || (q.correctAnswers?.length === 1 ? q.correctAnswers[0] : '')
+    }));
+    setEditingQuiz({ ...quiz, questions: normalizedQuestions.map(q => ({ ...q, options: [...q.options], explanationImages: [...(q.explanationImages || [])], questionImages: [...(q.questionImages || [])] })) });
     setView('builder');
   };
 
@@ -552,6 +581,12 @@ const QuizModal = ({ isOpen, onClose, type, targetId, targetLabel, uploadFile, m
     }
     try {
       const payload = { ...editingQuiz };
+      // تحويل كل الأسئلة للتأكد من وجود correctAnswers
+      payload.questions = payload.questions.map(q => ({
+        ...q,
+        correctAnswers: q.correctAnswers || [],
+        correctAnswer: q.correctAnswers?.length === 1 ? q.correctAnswers[0] : ''
+      }));
       delete payload._id;
       const isEdit = !!editingQuiz._id;
       const res = await fetch(
@@ -743,7 +778,7 @@ function AdminModuleContent() {
         return '';
       }
       const data = await res.json();
-      return ensureHttps(data.url); // ✅ تحويل الرابط للـ HTTPS
+      return ensureHttps(data.url);
     } catch (err) {
       console.error(err);
       alert('Erreur réseau.');
