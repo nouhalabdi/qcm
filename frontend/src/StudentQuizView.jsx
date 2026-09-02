@@ -17,7 +17,7 @@ function StudentQuizView() {
   const [quiz, setQuiz] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [selectedAnswers, setSelectedAnswers] = useState({});
+  const [selectedAnswers, setSelectedAnswers] = useState({}); // لكل سؤال: مصفوفة من الخيارات المختارة
   const [answeredQuestions, setAnsweredQuestions] = useState(new Set());
   const [score, setScore] = useState(0);
   const [isFinished, setIsFinished] = useState(false);
@@ -33,7 +33,6 @@ function StudentQuizView() {
   const [chatConversationId, setChatConversationId] = useState(null);
   const [chatTitle, setChatTitle] = useState('');
 
-  // حالات لكل سؤال
   const [favoriteQuestions, setFavoriteQuestions] = useState({});
   const [questionNotes, setQuestionNotes] = useState({});
   const [activeQuestionNoteIndex, setActiveQuestionNoteIndex] = useState(null);
@@ -46,13 +45,23 @@ function StudentQuizView() {
   const [lastTimeTaken, setLastTimeTaken] = useState(0);
   const [zoomedImage, setZoomedImage] = useState(null);
 
-  // ✅ دالة تحويل الرابط إلى HTTPS
+  // دالة تحويل الرابط إلى HTTPS
   const ensureHttps = (url) => {
     if (!url) return url;
     return url.replace(/^http:/, 'https:');
   };
 
-  // ✅ تثبيت السؤال الحالي
+  // استخراج الإجابات الصحيحة كمصفوفة (للتكيف مع صيغة correctAnswer أو correctAnswers)
+  const getCorrectAnswers = (question) => {
+    if (question.correctAnswers && Array.isArray(question.correctAnswers)) {
+      return question.correctAnswers.filter(ans => ans && ans.trim() !== '');
+    }
+    if (question.correctAnswer && question.correctAnswer.trim() !== '') {
+      return [question.correctAnswer.trim()];
+    }
+    return [];
+  };
+
   const currentQuestion = useMemo(() => {
     return quiz?.questions?.[currentQuestionIndex] || {};
   }, [quiz, currentQuestionIndex]);
@@ -220,11 +229,83 @@ function StudentQuizView() {
     }
   };
 
+  // ---- تأكيد الإجابات المختارة ----
+  const confirmAnswer = () => {
+    if (isFinished || isReviewMode) return;
+    // لا يسمح بالتأكيد إذا لم يتم اختيار أي خيار
+    const selected = selectedAnswers[currentQuestionIndex] || [];
+    if (selected.length === 0) {
+      alert('Veuillez sélectionner au moins une réponse.');
+      return;
+    }
+    const effectiveMode = (quiz.type !== 'lesson' && isPracticeMode) ? 'immediate' : quiz.correctionMode;
+    if (effectiveMode === 'immediate') {
+      // في التصحيح الفوري، نحسب النتيجة فوراً و نظهر التصحيح
+      setShowExplanation(true);
+    }
+  };
+
+  // ---- معالجة اختيار خيار (تحديد / إلغاء تحديد) ----
+  const handleOptionToggle = (option) => {
+    if (isFinished || isReviewMode || showExplanation) return;
+    const currentSelected = selectedAnswers[currentQuestionIndex] || [];
+    const newSelected = currentSelected.includes(option)
+      ? currentSelected.filter(o => o !== option)
+      : [...currentSelected, option];
+    setSelectedAnswers(prev => ({
+      ...prev,
+      [currentQuestionIndex]: newSelected
+    }));
+  };
+
+  // ---- الانتقال للسؤال التالي بعد التصحيح (واضح أننا نضغط "التالي") ----
+  const handleNext = () => {
+    if (isReviewMode) {
+      if (currentQuestionIndex < quiz.questions.length - 1) {
+        setCurrentQuestionIndex(currentQuestionIndex + 1);
+      } else {
+        if (returnToFollow) navigate('/cours', { state: { returnToFollow: true, moduleId: moduleIdFromState } });
+        else if (quiz.type === 'simulation') navigate('/simulations');
+        else navigate('/cours');
+      }
+      return;
+    }
+
+    // في وضع التصحيح الفوري، نتحقق من أن السؤال قد تم التأكيد عليه
+    const effectiveMode = (quiz.type !== 'lesson' && isPracticeMode) ? 'immediate' : quiz.correctionMode;
+    if (effectiveMode === 'immediate') {
+      if (!showExplanation) {
+        alert('Veuillez confirmer vos réponses d\'abord.');
+        return;
+      }
+      // نضيف السؤال إلى المجموعة التي تم الإجابة عليها (إذا لم يسبق)
+      if (!answeredQuestions.has(currentQuestionIndex)) {
+        const corrects = getCorrectAnswers(currentQuestion);
+        const selected = selectedAnswers[currentQuestionIndex] || [];
+        // نقارن المجموعتين: صحيح إذا كانت كل الإجابات المختارة صحيحة وكل الإجابات الصحيحة مختارة
+        const isCorrect = selected.length === corrects.length && selected.every(ans => corrects.includes(ans));
+        if (isCorrect) setScore(prev => prev + 1);
+        setAnsweredQuestions(prev => new Set(prev.add(currentQuestionIndex)));
+      }
+    }
+
+    setShowExplanation(false);
+    if (currentQuestionIndex < quiz.questions.length - 1) {
+      setCurrentQuestionIndex(currentQuestionIndex + 1);
+    } else {
+      handleFinish();
+    }
+  };
+
   const handleFinish = async () => {
     if (isReviewMode) return;
     let correctCount = 0;
     quiz.questions.forEach((q, idx) => {
-      if (q.correctAnswer && selectedAnswers[idx] === q.correctAnswer) correctCount++;
+      const corrects = getCorrectAnswers(q);
+      const selected = selectedAnswers[idx] || [];
+      // صحيح فقط إذا تطابق المجموعتان تماماً
+      const isCorrect = selected.length === corrects.length && selected.every(ans => corrects.includes(ans));
+      if (isCorrect) correctCount++;
     });
     setScore(correctCount);
     setIsFinished(true);
@@ -247,42 +328,6 @@ function StudentQuizView() {
       setIsSaving(false);
     }
     setIsFirstAttempt(false);
-  };
-
-  const handleAnswer = (option) => {
-    if (isFinished || isReviewMode) return;
-    setSelectedAnswers(prev => ({ ...prev, [currentQuestionIndex]: option }));
-    const effectiveMode = (quiz.type !== 'lesson' && isPracticeMode) ? 'immediate' : quiz.correctionMode;
-    if (effectiveMode === 'immediate') setShowExplanation(true);
-  };
-
-  const handleNext = () => {
-    if (isReviewMode) {
-      if (currentQuestionIndex < quiz.questions.length - 1) {
-        setCurrentQuestionIndex(currentQuestionIndex + 1);
-      } else {
-        if (returnToFollow) navigate('/cours', { state: { returnToFollow: true, moduleId: moduleIdFromState } });
-        else if (quiz.type === 'simulation') navigate('/simulations');
-        else navigate('/cours');
-      }
-      return;
-    }
-
-    const effectiveMode = (quiz.type !== 'lesson' && isPracticeMode) ? 'immediate' : quiz.correctionMode;
-    if (effectiveMode === 'immediate' && selectedAnswers[currentQuestionIndex] !== undefined) {
-      if (!answeredQuestions.has(currentQuestionIndex)) {
-        const q = quiz.questions[currentQuestionIndex];
-        const isCorrect = q.correctAnswer && selectedAnswers[currentQuestionIndex] === q.correctAnswer;
-        if (isCorrect) setScore(prev => prev + 1);
-        setAnsweredQuestions(prev => new Set(prev.add(currentQuestionIndex)));
-      }
-    }
-    setShowExplanation(false);
-    if (currentQuestionIndex < quiz.questions.length - 1) {
-      setCurrentQuestionIndex(currentQuestionIndex + 1);
-    } else {
-      handleFinish();
-    }
   };
 
   const handleExit = () => {
@@ -324,7 +369,6 @@ function StudentQuizView() {
     return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  // ✅ ImageGallery مع تحويل الروابط إلى HTTPS
   const ImageGallery = ({ images, alt }) => {
     if (!images || images.length === 0) return null;
     return (
@@ -419,13 +463,14 @@ function StudentQuizView() {
 
               <div className="space-y-3 mt-4">
                 {currentQuestion.options.map((opt, idx) => {
-                  let btnClass = "w-full text-left p-3 border rounded-lg bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 transition";
-                  const isSelected = selectedAnswers[currentQuestionIndex] === opt;
-                  const hasCorrectAnswer = !!currentQuestion.correctAnswer;
-                  const isCorrect = hasCorrectAnswer && opt === currentQuestion.correctAnswer;
-                  const revealCorrection = effectiveCorrectionMode === 'immediate' && hasCorrectAnswer;
+                  const selected = (selectedAnswers[currentQuestionIndex] || []).includes(opt);
+                  const corrects = getCorrectAnswers(currentQuestion);
+                  const hasCorrect = corrects.length > 0;
+                  const isCorrect = hasCorrect && corrects.includes(opt);
+                  const revealCorrection = effectiveCorrectionMode === 'immediate' && showExplanation && hasCorrect;
 
-                  if (isSelected) {
+                  let btnClass = "w-full text-left p-3 border rounded-lg bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 transition";
+                  if (selected) {
                     if (revealCorrection) {
                       btnClass = isCorrect
                         ? "w-full text-left p-3 border-2 border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700"
@@ -433,24 +478,36 @@ function StudentQuizView() {
                     } else {
                       btnClass = "w-full text-left p-3 border-2 border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700";
                     }
-                  } else if (revealCorrection && showExplanation && isCorrect) {
+                  } else if (revealCorrection && isCorrect) {
                     btnClass = "w-full text-left p-3 border-2 border-green-500 bg-green-50/30 dark:bg-green-900/10 text-green-700";
                   }
 
                   return (
                     <button
                       key={idx}
-                      onClick={() => handleAnswer(opt)}
-                      disabled={!!selectedAnswers[currentQuestionIndex] || isFinished}
+                      onClick={() => handleOptionToggle(opt)}
+                      disabled={showExplanation || isFinished}
                       className={btnClass}
                     >
                       {opt}
-                      {isSelected && revealCorrection && isCorrect && <CheckCircle className="inline ml-2 text-green-600" size={16} />}
-                      {isSelected && revealCorrection && !isCorrect && <XCircle className="inline ml-2 text-red-600" size={16} />}
+                      {selected && revealCorrection && isCorrect && <CheckCircle className="inline ml-2 text-green-600" size={16} />}
+                      {selected && revealCorrection && !isCorrect && <XCircle className="inline ml-2 text-red-600" size={16} />}
                     </button>
                   );
                 })}
               </div>
+
+              {/* زر تأكيد الإجابات (صغير) يظهر فقط إذا لم يتم عرض التصحيح بعد ولم يتم الانتهاء */}
+              {!showExplanation && !isFinished && (
+                <div className="mt-3 flex justify-center">
+                  <button
+                    onClick={confirmAnswer}
+                    className="px-4 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm rounded-lg shadow transition flex items-center gap-2"
+                  >
+                    <CheckCircle size={16} /> Confirmer mes réponses
+                  </button>
+                </div>
+              )}
 
               {showExplanation && (
                 <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
@@ -461,7 +518,7 @@ function StudentQuizView() {
                 </div>
               )}
 
-              {selectedAnswers[currentQuestionIndex] !== undefined && (
+              {showExplanation && (
                 <button onClick={handleNext} className="mt-4 w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg shadow transition flex items-center justify-center gap-2">
                   {currentQuestionIndex === totalQuestions - 1 ? 'Terminer l\'examen' : 'Suivant'}
                 </button>
@@ -534,25 +591,24 @@ function StudentQuizView() {
             <div className="text-left space-y-4 mt-6 border-t border-slate-200 dark:border-slate-700 pt-6">
               <h3 className="font-bold text-slate-800 dark:text-white mb-4">Détail des corrections :</h3>
               {quiz.questions.map((q, idx) => {
-                const studentAnswer = selectedAnswers[idx];
+                const studentAnswer = selectedAnswers[idx] || [];
+                const corrects = getCorrectAnswers(q);
                 let wasCorrect = false;
-                if (q.correctAnswer) {
-                  wasCorrect = studentAnswer === q.correctAnswer;
-                } else {
-                  wasCorrect = false;
+                if (corrects.length > 0) {
+                  wasCorrect = studentAnswer.length === corrects.length && studentAnswer.every(ans => corrects.includes(ans));
                 }
                 return (
                   <div key={idx} className="p-3 border rounded-lg bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700">
                     <p className="text-sm font-medium text-slate-800 dark:text-white">{idx + 1}. {q.questionText}</p>
-                    {studentAnswer !== undefined && (
+                    {studentAnswer.length > 0 && (
                       <p className={`text-sm mt-1 ${wasCorrect ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                        {wasCorrect ? '✅' : '❌'} Votre réponse : {studentAnswer}
+                        {wasCorrect ? '✅' : '❌'} Vos réponses : {studentAnswer.join(', ')}
                       </p>
                     )}
-                    {q.correctAnswer && (studentAnswer === undefined || !wasCorrect) && (
-                      <p className="text-sm text-green-600 dark:text-green-400 mt-1">✅ Réponse correcte : {q.correctAnswer}</p>
+                    {corrects.length > 0 && (studentAnswer.length === 0 || !wasCorrect) && (
+                      <p className="text-sm text-green-600 dark:text-green-400 mt-1">✅ Réponse(s) correcte(s) : {corrects.join(', ')}</p>
                     )}
-                    {!q.correctAnswer && studentAnswer !== undefined && (
+                    {corrects.length === 0 && studentAnswer.length > 0 && (
                       <p className="text-sm text-orange-500 dark:text-orange-400 mt-1">⚠️ Aucune réponse correcte définie.</p>
                     )}
                     {quiz.type === 'simulation' && q.explanation && (
