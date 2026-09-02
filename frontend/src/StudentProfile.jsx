@@ -885,7 +885,7 @@ function StudentProfile() {
           </div>
         </div>
 
-        {/* 🔹 MODALE : affiche les questions groupées par type (favoris ou notes) */}
+        {/* 🔹 MODALE : affiche les questions groupées par type (favoris ou notes) - avec affichage des réponses correctes multiples */}
         {modalItems && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-4xl w-full p-6 max-h-[90vh] overflow-y-auto">
@@ -903,6 +903,15 @@ function StudentProfile() {
                   } else {
                     labelInfo = item.title ? ` (QCM: ${item.title})` : '';
                   }
+
+                  // Récupérer les réponses correctes (peuvent être multiples)
+                  let correctAnswers = [];
+                  if (q && q.correctAnswers && Array.isArray(q.correctAnswers) && q.correctAnswers.length > 0) {
+                    correctAnswers = q.correctAnswers.filter(a => a && a.trim() !== '');
+                  } else if (q && q.correctAnswer && q.correctAnswer.trim() !== '') {
+                    correctAnswers = [q.correctAnswer.trim()];
+                  }
+
                   return (
                     <div key={idx} className="p-4 border rounded-lg bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700">
                       <div className="flex items-start justify-between">
@@ -917,13 +926,18 @@ function StudentProfile() {
                         )}
                       </div>
                       <div className="mt-2 space-y-1">
-                        {q?.options?.map((opt, oi) => (
-                          <div key={oi} className={`p-1 rounded ${q.correctAnswer === opt ? 'bg-green-100 dark:bg-green-900/30 text-green-700' : ''}`}>
-                            {opt} {q.correctAnswer === opt && '✅'}
-                          </div>
-                        ))}
+                        {q?.options?.map((opt, oi) => {
+                          const isCorrect = correctAnswers.includes(opt);
+                          return (
+                            <div key={oi} className={`p-1 rounded ${isCorrect ? 'bg-green-100 dark:bg-green-900/30 text-green-700' : ''}`}>
+                              {opt} {isCorrect && '✅'}
+                            </div>
+                          );
+                        })}
                       </div>
-                      {!q?.correctAnswer && <p className="text-orange-500 text-xs mt-1">Aucune réponse correcte définie.</p>}
+                      {correctAnswers.length === 0 && (
+                        <p className="text-orange-500 text-xs mt-1">⚠️ Aucune réponse correcte définie.</p>
+                      )}
                       {modalType === 'note' && item.noteText && (
                         <p className="mt-2 text-sm text-purple-700 dark:text-purple-400">📝 {item.noteText}</p>
                       )}
