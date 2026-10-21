@@ -15,10 +15,12 @@ const storage = new CloudinaryStorage({
   params: async (req, file) => {
     let folder = 'reussite-qcms';
     let resource_type = 'auto';
+    let format = undefined;
 
     if (file.mimetype === 'application/pdf') {
       folder = 'reussite-qcms/pdfs';
-      resource_type = 'raw';
+      resource_type = 'image';
+      format = 'pdf';
     } else if (file.mimetype.startsWith('image/')) {
       folder = 'reussite-qcms/images';
       resource_type = 'image';
@@ -30,6 +32,7 @@ const storage = new CloudinaryStorage({
     return {
       folder: folder,
       resource_type: resource_type,
+      format: format,
       public_id: Date.now() + '-' + Math.random().toString(36).substring(2, 10),
     };
   },
@@ -69,7 +72,7 @@ router.post('/', upload.single('file'), (req, res) => {
       return res.status(400).json({ error: 'Aucun fichier recu.' });
     }
 
-    console.log('Fichier uploade sur Cloudinary :', req.file.path);
+    console.log('CLOUDINARY UPLOAD OK :', req.file.path);
 
     res.json({
       url: req.file.path,
@@ -140,7 +143,7 @@ router.delete('/:public_id', async (req, res) => {
 router.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === 'FILE_TOO_LARGE') {
-      return res.status(400).json({ error: 'Le fichier est trop volumineux (max 1GB).' });
+      return res.status(400).json({ error: 'Le fichier est tres volumineux (max 1GB).' });
     }
     return res.status(400).json({ error: err.message });
   }
