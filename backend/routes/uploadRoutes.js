@@ -1,36 +1,50 @@
 const express = require('express');
 const multer = require('multer');
-const path = require('path');
-const fs = require('fs');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const router = express.Router();
 
-// مجلد التخزين المحلي
-const uploadsDir = path.join(__dirname, '..', 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-  console.log('📁 Dossier uploads créé par uploadRoutes');
-}
 
-// إعداد التخزين المحلي
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadsDir);
-  },
-  filename: (req, file, cb) => {
-    // تنظيف اسم الملف
-    const cleanName = file.originalname.replace(/\s/g, '_').replace(/[^a-zA-Z0-9.]/g, '');
-    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-    cb(null, uniqueSuffix + path.extname(cleanName));
-  }
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
 });
 
-// فلترة أنواع الملفات المسموح بها
+
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: async (req, file) => {
+    let folder = 'reussite-qcms';
+    let resource_type = 'auto';
+
+    if (file.mimetype === 'application/pdf') {
+      folder = 'reussite-qcms/pdfs';
+     
+      resource_type = 'raw';
+    } else if (file.mimetype.startsWith('image/')) {
+      folder = 'reussite-qcms/images';
+      resource_type = 'image';
+    } else if (file.mimetype.startsWith('video/')) {
+      folder = 'reussite-qcms/videos';
+      resource_type = 'video';
+    }
+
+    return {
+      folder: folder,
+      resource_type: resource_type,
+      public_id: `${Date.now()}-${Math.random().toString(36).substring(2, 10)}`,
+    };
+  },
+});
+
+
 const fileFilter = (req, file, cb) => {
   const allowedMimeTypes = [
     'application/pdf',
     'image/jpeg', 'image/png', 'image/gif', 'image/webp',
     'video/mp4', 'video/webm', 'video/ogg', 'video/quicktime',
-    'video/x-msvideo', 'video/x-matroska'
+    'video/x-msvideo', 'video/x-matroska',
   ];
   if (allowedMimeTypes.includes(file.mimetype)) {
     cb(null, true);
@@ -42,29 +56,25 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
-  limits: { fileSize: 1024 * 1024 * 1024 } // 1 GB
+  limits: { fileSize: 1024 * 1024 * 1024 }, // 1 GB
 });
 
-// مسار رفع ملف واحد
+
 router.post('/', upload.single('file'), (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'Aucun fichier reçu.' });
     }
-
-    const baseUrl = process.env.BACKEND_URL || 'https://reussite-qcmss-1nc7.onrender.com';
-    // التأكد من HTTPS
-    const secureBaseUrl = baseUrl.replace(/^http:/, 'https:');
-    const fileUrl = `${secureBaseUrl}/uploads/${req.file.filename}`;
-
-    console.log('📁 Fichier uploadé (local):', req.file.filename);
-    console.log('🔗 URL:', fileUrl);
+]
+    console.log('☁️  Fichier uploadé sur Cloudinary');
+    console.log('   URL       :', req.file.path);
+    console.log('   public_id :', req.file.filename);
 
     res.json({
-      url: fileUrl,
-      filename: req.file.filename,
+      url: req.file.path,            
+      public_id: req.file.filename,  
       size: req.file.size,
-      mimetype: req.file.mimetype
+      mimetype: req.file.mimetype,
     });
   } catch (err) {
     console.error('❌ Erreur upload:', err);
@@ -72,24 +82,22 @@ router.post('/', upload.single('file'), (req, res) => {
   }
 });
 
-// مسار رفع عدة ملفات
+
 router.post('/multiple', upload.array('files', 10), (req, res) => {
   try {
     if (!req.files || req.files.length === 0) {
       return res.status(400).json({ error: 'Aucun fichier reçu.' });
     }
 
-    const baseUrl = process.env.BACKEND_URL || 'https://reussite-qcmss-1nc7.onrender.com';
-    const secureBaseUrl = baseUrl.replace(/^http:/, 'https:');
-    const files = req.files.map(file => ({
-      url: `${secureBaseUrl}/uploads/${file.filename}`,
-      filename: file.filename,
+    const files = req.files.map((file) => ({
+      url: file.path,
+      public_id: file.filename,
       originalName: file.originalname,
       size: file.size,
-      mimetype: file.mimetype
+      mimetype: file.mimetype,
     }));
 
-    console.log(`📁 ${files.length} fichiers uploadés localement`);
+    console.log(`☁️  ${files.length} fichiers uploadés sur Cloudinary`);
     res.json({ files });
   } catch (err) {
     console.error('❌ Erreur upload multiple:', err);
@@ -97,27 +105,46 @@ router.post('/multiple', upload.array('files', 10), (req, res) => {
   }
 });
 
-// مسار حذف ملف
-router.delete('/:filename', (req, res) => {
+
+router.delete('/:public_id', async (req, res) => {
   try {
-    const filePath = path.join(uploadsDir, req.params.filename);
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: 'Fichier non trouvé.' });
+    const publicId = decodeURIComponent(req.params.public_id);
+    let result = { result: 'not found' };
+
+   
+    for (const type of ['image', 'raw', 'video']) {
+      try {
+        const r = await cloudinary.uploader.destroy(publicId, {
+          resource_type: type,
+        });
+        if (r.result === 'ok') {
+          result = r;
+          break;
+        }
+      } catch (_) {
+        /* continuer */
+      }
     }
-    fs.unlinkSync(filePath);
-    console.log('🗑️ Fichier supprimé:', req.params.filename);
-    res.json({ message: 'Fichier supprimé avec succès.' });
+
+    if (result.result === 'ok') {
+      console.log('🗑️  Fichier supprimé de Cloudinary:', publicId);
+      res.json({ message: 'Fichier supprimé avec succès.' });
+    } else {
+      res.status(404).json({ error: 'Fichier non trouvé sur Cloudinary.' });
+    }
   } catch (err) {
-    console.error('❌ Erreur suppression:', err);
+    console.error('❌ Erreur suppression Cloudinary:', err);
     res.status(500).json({ error: err.message });
   }
 });
 
-// معالج أخطاء Multer
+
 router.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === 'FILE_TOO_LARGE') {
-      return res.status(400).json({ error: 'Le fichier est trop volumineux (max 1GB).' });
+      return res
+        .status(400)
+        .json({ error: 'Le fichier est trop volumineux (max 1GB).' });
     }
     return res.status(400).json({ error: err.message });
   }
