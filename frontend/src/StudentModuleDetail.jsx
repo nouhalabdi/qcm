@@ -486,7 +486,6 @@ function StudentModuleDetail() {
                       <div>
                         <p className="font-medium text-slate-800 dark:text-white">
                           {qcm.title || 'QCM Normal'}
-                          
                         </p>
                         <p className="text-xs text-slate-500">{qcm.questions?.length || 0} questions · {qcm.durationMinutes} min</p>
                       </div>
@@ -575,7 +574,7 @@ function StudentModuleDetail() {
           </div>
         )}
 
-        {/* Affichage du contenu selon la catégorie (inchangé) */}
+        {/* Affichage du contenu selon la catégorie */}
         {activeCategory && (
           <div className="px-4 pb-8 space-y-4 border-t border-slate-200 dark:border-slate-700 pt-6">
             <div className="flex flex-wrap items-center justify-between mb-2 gap-2">
@@ -627,7 +626,6 @@ function StudentModuleDetail() {
                             <button
                               key={idx}
                               onClick={() => openPdfViewer(file.url, file.name, false, false, lesson._id, selectedYear)}
-
                               className="flex items-center gap-1 text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition"
                             >
                               <FileText size={14} /> {file.name}
@@ -636,7 +634,7 @@ function StudentModuleDetail() {
                           {modifiedFiles.map((file, idx) => (
                             <button
                               key={`mod-${idx}`}
-                              onClick={() => openPdfViewer(f.url, f.name || label, false, false, lesson._id, selectedYear)}
+                              onClick={() => openPdfViewer(file.url, file.name, false, false, lesson._id, selectedYear)}
                               className="flex items-center gap-1 text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded-lg hover:bg-green-200 transition"
                             >
                               <FileText size={14} /> {file.name}
@@ -771,7 +769,7 @@ function StudentModuleDetail() {
                             const isCorrection = version.correction && version.correction.some(c => c.url === f.url);
                             const label = isCorrection ? 'Correction' : 'TD';
                             return (
-                              <button key={i} onClick={() => openPdfViewer(f.url, f.name || label, false, true, lesson._id, selectedYear)} className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition ${isCorrection ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' : 'bg-orange-100 text-orange-700 hover:bg-orange-200'}`}>
+                              <button key={i} onClick={() => openPdfViewer(f.url, f.name || label, false, false, lesson._id, selectedYear)} className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition ${isCorrection ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' : 'bg-orange-100 text-orange-700 hover:bg-orange-200'}`}>
                                 <FileText size={14} /> {f.name || label}
                               </button>
                             );
