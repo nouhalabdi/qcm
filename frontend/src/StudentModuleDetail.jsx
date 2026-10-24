@@ -626,7 +626,8 @@ function StudentModuleDetail() {
                           {originalFiles.map((file, idx) => (
                             <button
                               key={idx}
-                              onClick={() => openPdfViewer(file.url, file.name, true, true, lesson._id, selectedYear)}
+                              onClick={() => openPdfViewer(file.url, file.name, false, false, lesson._id, selectedYear)}
+
                               className="flex items-center gap-1 text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition"
                             >
                               <FileText size={14} /> {file.name}
@@ -635,7 +636,7 @@ function StudentModuleDetail() {
                           {modifiedFiles.map((file, idx) => (
                             <button
                               key={`mod-${idx}`}
-                              onClick={() => openPdfViewer(file.url, file.name, true, true, lesson._id, selectedYear)}
+                              onClick={() => openPdfViewer(f.url, f.name || label, false, false, lesson._id, selectedYear)}
                               className="flex items-center gap-1 text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded-lg hover:bg-green-200 transition"
                             >
                               <FileText size={14} /> {file.name}
