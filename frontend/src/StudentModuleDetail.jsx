@@ -423,7 +423,7 @@ function StudentModuleDetail() {
           </div>
         )}
 
-        {/* Modale pour afficher les QCMs par année (avec titres entre parenthèses) */}
+        {/* Modale pour afficher les QCMs par année */}
         {showYearQCMs && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-lg w-full p-6 max-h-[80vh] overflow-y-auto">
@@ -467,7 +467,7 @@ function StudentModuleDetail() {
           </div>
         )}
 
-        {/* Modale pour afficher les QCMs par cours (avec titres, pas d'années) */}
+        {/* Modale pour afficher les QCMs par cours */}
         {showLessonQCMs && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-lg w-full p-6 max-h-[80vh] overflow-y-auto">
@@ -590,7 +590,7 @@ function StudentModuleDetail() {
               <button onClick={() => { setActiveCategory(null); setSelectedYear(null); }} className="text-xs text-red-500 hover:text-red-700">Fermer</button>
             </div>
 
-            {/* ---- CATÉGORIE COURS ---- */}
+            {/* ---- CATÉGORIE COURS (قابل للتعديل، غير قابل للتحميل) ---- */}
             {activeCategory === 'cours' && selectedYear && (
               <div className="space-y-4">
                 {(() => {
@@ -622,7 +622,6 @@ function StudentModuleDetail() {
                         </div>
 
                         <div className="mt-3 flex flex-wrap items-center gap-2">
-                          {/* ✅ هنا التعديل: السماح بالتعديل (true) ومنع التحميل (false) */}
                           {originalFiles.map((file, idx) => (
                             <button
                               key={idx}
@@ -672,7 +671,7 @@ function StudentModuleDetail() {
               </div>
             )}
 
-            {/* ---- RÉSUMÉS ---- */}
+            {/* ---- RÉSUMÉS (للقراءة فقط) ---- */}
             {activeCategory === 'resume' && selectedYear && (
               <div className="space-y-3">
                 {(() => {
@@ -744,7 +743,7 @@ function StudentModuleDetail() {
               </div>
             )}
 
-            {/* ---- TD ---- */}
+            {/* ---- TD (للقراءة فقط، غير قابل للتعديل أو التحميل) ---- */}
             {activeCategory === 'td' && selectedYear && (
               <div className="space-y-3">
                 {(() => {
@@ -770,8 +769,7 @@ function StudentModuleDetail() {
                             const isCorrection = version.correction && version.correction.some(c => c.url === f.url);
                             const label = isCorrection ? 'Correction' : 'TD';
                             return (
-                              /* ✅ هنا التعديل: السماح بالتعديل (true) ومنع التحميل (false) */
-                              <button key={i} onClick={() => openPdfViewer(f.url, f.name || label, true, false, lesson._id, selectedYear)} className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition ${isCorrection ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' : 'bg-orange-100 text-orange-700 hover:bg-orange-200'}`}>
+                              <button key={i} onClick={() => openPdfViewer(f.url, f.name || label, false, false, lesson._id, selectedYear)} className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition ${isCorrection ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' : 'bg-orange-100 text-orange-700 hover:bg-orange-200'}`}>
                                 <FileText size={14} /> {f.name || label}
                               </button>
                             );
