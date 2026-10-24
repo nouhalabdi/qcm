@@ -1,4 +1,4 @@
-// StudentModuleDetail.jsx - مع إعادة زر QCMS وتعديل القوائم
+// StudentModuleDetail.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, FileText, Video, BookOpen, Play, CheckCircle, X, Clock } from 'lucide-react';
@@ -381,7 +381,7 @@ function StudentModuleDetail() {
           </div>
         </div>
 
-        {/* 5 boutons (avec le bouton QCMs restauré) */}
+        {/* 5 boutons */}
         <h3 className="text-center text-lg sm:text-xl font-bold text-slate-900 dark:text-white mt-6 mb-4">LES CATÉGORIES :</h3>
         <div className="flex flex-wrap justify-center gap-1 sm:gap-2 px-4 pb-6">
           <button onClick={() => handleCategorySelect('cours')} className="flex-1 min-w-[60px] sm:min-w-[100px] flex flex-col items-center justify-center p-2 sm:p-4 bg-[#2EC4B6] text-white rounded-2xl shadow-sm hover:opacity-90 transition h-14 sm:h-20">
@@ -401,7 +401,7 @@ function StudentModuleDetail() {
           </button>
         </div>
 
-        {/* ✅ Modale de choix entre QCM par année et QCM par cours */}
+        {/* Modale de choix entre QCM par année et QCM par cours */}
         {showQCMTypeModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6">
@@ -423,7 +423,7 @@ function StudentModuleDetail() {
           </div>
         )}
 
-        {/* ✅ Modale pour afficher les QCMs par année (avec titres entre parenthèses) */}
+        {/* Modale pour afficher les QCMs par année (avec titres entre parenthèses) */}
         {showYearQCMs && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-lg w-full p-6 max-h-[80vh] overflow-y-auto">
@@ -467,7 +467,7 @@ function StudentModuleDetail() {
           </div>
         )}
 
-        {/* ✅ Modale pour afficher les QCMs par cours (avec titres, pas d'années) */}
+        {/* Modale pour afficher les QCMs par cours (avec titres, pas d'années) */}
         {showLessonQCMs && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-lg w-full p-6 max-h-[80vh] overflow-y-auto">
@@ -506,7 +506,7 @@ function StudentModuleDetail() {
           </div>
         )}
 
-        {/* Modale choix année (pour les catégories Cours, Résumés, etc.) - inchangée */}
+        {/* Modale choix année (pour les catégories Cours, Résumés, etc.) */}
         {showYearPicker && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-md w-full p-6">
@@ -539,7 +539,7 @@ function StudentModuleDetail() {
           </div>
         )}
 
-        {/* Modal QCM IA du cours (inchangé) */}
+        {/* Modal QCM IA du cours */}
         {iaCourseQuizModal.open && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
             <div className="bg-white dark:bg-slate-800 rounded-xl shadow-2xl max-w-lg w-full p-6">
@@ -590,7 +590,7 @@ function StudentModuleDetail() {
               <button onClick={() => { setActiveCategory(null); setSelectedYear(null); }} className="text-xs text-red-500 hover:text-red-700">Fermer</button>
             </div>
 
-            {/* ---- CATÉGORIE COURS (avec QCM IA) ---- */}
+            {/* ---- CATÉGORIE COURS ---- */}
             {activeCategory === 'cours' && selectedYear && (
               <div className="space-y-4">
                 {(() => {
@@ -622,10 +622,11 @@ function StudentModuleDetail() {
                         </div>
 
                         <div className="mt-3 flex flex-wrap items-center gap-2">
+                          {/* ✅ هنا التعديل: السماح بالتعديل (true) ومنع التحميل (false) */}
                           {originalFiles.map((file, idx) => (
                             <button
                               key={idx}
-                              onClick={() => openPdfViewer(file.url, file.name, false, false, lesson._id, selectedYear)}
+                              onClick={() => openPdfViewer(file.url, file.name, true, false, lesson._id, selectedYear)}
                               className="flex items-center gap-1 text-xs bg-blue-100 text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-200 transition"
                             >
                               <FileText size={14} /> {file.name}
@@ -634,7 +635,7 @@ function StudentModuleDetail() {
                           {modifiedFiles.map((file, idx) => (
                             <button
                               key={`mod-${idx}`}
-                              onClick={() => openPdfViewer(file.url, file.name, false, false, lesson._id, selectedYear)}
+                              onClick={() => openPdfViewer(file.url, file.name, true, false, lesson._id, selectedYear)}
                               className="flex items-center gap-1 text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded-lg hover:bg-green-200 transition"
                             >
                               <FileText size={14} /> {file.name}
@@ -769,7 +770,8 @@ function StudentModuleDetail() {
                             const isCorrection = version.correction && version.correction.some(c => c.url === f.url);
                             const label = isCorrection ? 'Correction' : 'TD';
                             return (
-                              <button key={i} onClick={() => openPdfViewer(f.url, f.name || label, false, false, lesson._id, selectedYear)} className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition ${isCorrection ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' : 'bg-orange-100 text-orange-700 hover:bg-orange-200'}`}>
+                              /* ✅ هنا التعديل: السماح بالتعديل (true) ومنع التحميل (false) */
+                              <button key={i} onClick={() => openPdfViewer(f.url, f.name || label, true, false, lesson._id, selectedYear)} className={`flex items-center gap-1 text-xs px-2 py-1 rounded transition ${isCorrection ? 'bg-purple-100 text-purple-700 hover:bg-purple-200' : 'bg-orange-100 text-orange-700 hover:bg-orange-200'}`}>
                                 <FileText size={14} /> {f.name || label}
                               </button>
                             );
