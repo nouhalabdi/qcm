@@ -1,4 +1,4 @@
-// PdfAnnotatorModal.jsx - إصلاح التمرير في الهاتف وزر الحذف
+// PdfAnnotatorModal.jsx - 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
@@ -14,6 +14,19 @@ if (typeof window !== 'undefined') {
 }
 
 const COLORS = ['#facc15', '#f87171', '#4ade80', '#60a5fa', '#c084fc', '#1e293b'];
+
+// ✅ مكوّن منفصل ومحمي (Memoized) لمنع الصفحة من إعادة الرسم (الاختفاء) عند كل حركة قلم
+const MemoizedPdfPage = React.memo(({ pageNumber, scale, onLoadSuccess }) => {
+  return (
+    <Page
+      pageNumber={pageNumber}
+      scale={scale}
+      onLoadSuccess={onLoadSuccess}
+      renderAnnotationLayer={false}
+      renderTextLayer={false}
+    />
+  );
+});
 
 const drawStrokesOnCanvas = (canvas, strokes, width, height, clear = true) => {
   if (!canvas) return;
@@ -62,7 +75,6 @@ function PdfAnnotatorModal({
   const [allStrokes, setAllStrokes] = useState({});
   const [pageSizes, setPageSizes] = useState({});
 
-  // ✅ حالة جديدة للتبديل بين القراءة والرسم في الهاتف
   const [isDrawingMode, setIsDrawingMode] = useState(false);
 
   const canvasRefs = useRef({});
@@ -126,20 +138,18 @@ function PdfAnnotatorModal({
     pages.forEach(p => redrawPage(Number(p)));
   }, [allStrokes, pageSizes, redrawPage]);
 
-  const onPageLoadSuccess = (page, pageNum) => {
+  // ✅ استخدام useCallback لمنع الدوال من التغير وإجبار الصفحة على إعادة الرسم
+  const onPageLoadSuccess = useCallback((page, pageNum) => {
     if (!mountedRef.current) return;
     const viewport = page.getViewport({ scale });
-    setPageSizes(prev => ({
-      ...prev,
-      [pageNum]: { width: viewport.width, height: viewport.height }
-    }));
-    const canvas = canvasRefs.current[pageNum]?.current;
-    if (canvas) {
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      redrawPage(pageNum);
-    }
-  };
+    setPageSizes(prev => {
+      // لا تقم بتحديث الحالة إذا كان الحجم لم يتغير لتجنب إعادة الرسم
+      if (prev[pageNum]?.width === viewport.width && prev[pageNum]?.height === viewport.height) {
+        return prev;
+      }
+      return { ...prev, [pageNum]: { width: viewport.width, height: viewport.height } };
+    });
+  }, [scale]);
 
   const getRelativePoint = (e, canvas) => {
     const rect = canvas.getBoundingClientRect();
@@ -149,15 +159,17 @@ function PdfAnnotatorModal({
   };
 
   const handlePointerDown = (e, pageNum) => {
-    if (!canAnnotate || !isDrawingMode || !mountedRef.current) return; // لا ترسم إذا كان في وضع القراءة
+    if (!canAnnotate || !isDrawingMode || !mountedRef.current) return;
     const canvas = canvasRefs.current[pageNum]?.current;
     if (!canvas) return;
     setActivePage(pageNum);
     isDrawingRef.current = true;
     const pt = getRelativePoint(e, canvas);
+    
     if (tool === 'eraser') {
       setAllStrokes(prev => {
         const strokes = (prev[pageNum] || []).filter(s => {
+          if (!s || !s.points) return false; // ✅ إصلاح خطأ (Cannot read properties of null)
           return !s.points.some(p => Math.hypot(p.x - pt.x, p.y - pt.y) < 0.02);
         });
         return { ...prev, [pageNum]: strokes };
@@ -173,9 +185,11 @@ function PdfAnnotatorModal({
     const canvas = canvasRefs.current[pageNum]?.current;
     if (!canvas) return;
     const pt = getRelativePoint(e, canvas);
+    
     if (tool === 'eraser') {
       setAllStrokes(prev => {
         const strokes = (prev[pageNum] || []).filter(s => {
+          if (!s || !s.points) return false; // ✅ إصلاح خطأ (Cannot read properties of null)
           return !s.points.some(p => Math.hypot(p.x - pt.x, p.y - pt.y) < 0.02);
         });
         return { ...prev, [pageNum]: strokes };
@@ -201,7 +215,6 @@ function PdfAnnotatorModal({
     currentStrokeRef.current = null;
   };
 
-  // ✅ إصلاح زر الحذف ليحذف الصفحة التي ترسم عليها (activePage)
   const clearPage = () => {
     if (!window.confirm(`Effacer toutes les annotations de la page ${activePage} ?`)) return;
     setAllStrokes(prev => ({ ...prev, [activePage]: [] }));
@@ -379,12 +392,10 @@ function PdfAnnotatorModal({
       const size = pageSizes[p] || { width: 700, height: 900 };
       return (
         <div key={p} id={`page-container-${p}`} className="relative mb-4 mx-auto shadow-lg" style={{ maxWidth: '100%' }}>
-          <Page
+          <MemoizedPdfPage
             pageNumber={p}
             scale={scale}
             onLoadSuccess={(page) => onPageLoadSuccess(page, p)}
-            renderAnnotationLayer={false}
-            renderTextLayer={false}
           />
           {canAnnotate && (
             <canvas
@@ -405,7 +416,6 @@ function PdfAnnotatorModal({
               }}
               width={size.width}
               height={size.height}
-              // ✅ التحكم في التمرير: إذا كان وضع الرسم مفعل نمنع التمرير (touch-none)، وإلا نسمح به (pointer-events-none)
               className={`absolute top-0 left-0 ${isDrawingMode ? 'touch-none' : 'pointer-events-none'}`}
               style={{ cursor: tool === 'eraser' ? 'cell' : 'crosshair', background: 'transparent' }}
               onMouseDown={(e) => handlePointerDown(e, p)}
@@ -430,7 +440,6 @@ function PdfAnnotatorModal({
           <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
             {canAnnotate && (
               <>
-                {/* ✅ زر التبديل بين وضع القراءة ووضع الرسم (للهاتف) */}
                 <button
                   onClick={() => setIsDrawingMode(!isDrawingMode)}
                   className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition ${isDrawingMode ? 'bg-blue-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}
