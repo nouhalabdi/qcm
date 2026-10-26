@@ -464,18 +464,18 @@ function StudentQuizView() {
                   const isCorrect = hasCorrect && corrects.includes(opt);
                   const revealCorrection = effectiveCorrectionMode === 'immediate' && showExplanation && hasCorrect;
 
-                  let btnClass = "w-full text-left p-3 border rounded-lg bg-slate-50 dark:bg-slate-900 hover:bg-slate-100 transition";
-                  if (selected) {
-                    if (revealCorrection) {
-                      btnClass = isCorrect
-                        ? "w-full text-left p-3 border-2 border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700"
-                        : "w-full text-left p-3 border-2 border-red-500 bg-red-50 dark:bg-red-900/20 text-red-700";
-                    } else {
-                      btnClass = "w-full text-left p-3 border-2 border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700";
-                    }
-                  } else if (revealCorrection && isCorrect) {
-                    btnClass = "w-full text-left p-3 border-2 border-green-500 bg-green-50/30 dark:bg-green-900/10 text-green-700";
-                  }
+                  let btnClass = "w-full text-left p-3 border rounded-lg bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-700 transition";
+                  if (isSelected) {
+  if (revealCorrection) {
+    btnClass = isCorrect
+      ? "w-full text-left p-3 border-2 border-green-500 bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300"
+      : "w-full text-left p-3 border-2 border-red-500 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300";
+  } else {
+    btnClass = "w-full text-left p-3 border-2 border-blue-500 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300";
+  }
+} else if (revealCorrection && showExplanation && isCorrect) {
+  btnClass = "w-full text-left p-3 border-2 border-green-500 bg-green-50/30 dark:bg-green-900/10 text-green-700 dark:text-green-300";
+}
 
                   return (
                     <button
