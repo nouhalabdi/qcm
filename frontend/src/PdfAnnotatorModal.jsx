@@ -1,4 +1,4 @@
-// PdfAnnotatorModal.jsx - إصلاح عرض الصفحات في النسخة المعدلة
+// PdfAnnotatorModal.jsx - إصلاح التمرير في الهاتف وزر الحذف
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
@@ -6,7 +6,7 @@ import 'react-pdf/dist/Page/TextLayer.css';
 import { PDFDocument } from 'pdf-lib';
 import {
   X, ChevronLeft, ChevronRight, Pen, Highlighter, Eraser,
-  Save, Download, Trash2, Loader2, ZoomIn, ZoomOut, Maximize2, Minimize2
+  Save, Download, Trash2, Loader2, ZoomIn, ZoomOut, Maximize2, Minimize2, Hand, Pencil
 } from 'lucide-react';
 
 if (typeof window !== 'undefined') {
@@ -61,6 +61,9 @@ function PdfAnnotatorModal({
   const [color, setColor] = useState(COLORS[0]);
   const [allStrokes, setAllStrokes] = useState({});
   const [pageSizes, setPageSizes] = useState({});
+
+  // ✅ حالة جديدة للتبديل بين القراءة والرسم في الهاتف
+  const [isDrawingMode, setIsDrawingMode] = useState(false);
 
   const canvasRefs = useRef({});
   const [activePage, setActivePage] = useState(1);
@@ -146,7 +149,7 @@ function PdfAnnotatorModal({
   };
 
   const handlePointerDown = (e, pageNum) => {
-    if (!canAnnotate || !mountedRef.current) return;
+    if (!canAnnotate || !isDrawingMode || !mountedRef.current) return; // لا ترسم إذا كان في وضع القراءة
     const canvas = canvasRefs.current[pageNum]?.current;
     if (!canvas) return;
     setActivePage(pageNum);
@@ -166,7 +169,7 @@ function PdfAnnotatorModal({
   };
 
   const handlePointerMove = (e, pageNum) => {
-    if (!canAnnotate || !isDrawingRef.current || !mountedRef.current) return;
+    if (!canAnnotate || !isDrawingMode || !isDrawingRef.current || !mountedRef.current) return;
     const canvas = canvasRefs.current[pageNum]?.current;
     if (!canvas) return;
     const pt = getRelativePoint(e, canvas);
@@ -198,9 +201,10 @@ function PdfAnnotatorModal({
     currentStrokeRef.current = null;
   };
 
+  // ✅ إصلاح زر الحذف ليحذف الصفحة التي ترسم عليها (activePage)
   const clearPage = () => {
-    if (!window.confirm('Effacer toutes les annotations de cette page ?')) return;
-    setAllStrokes(prev => ({ ...prev, [pageNumber]: [] }));
+    if (!window.confirm(`Effacer toutes les annotations de la page ${activePage} ?`)) return;
+    setAllStrokes(prev => ({ ...prev, [activePage]: [] }));
     setDirty(true);
   };
 
@@ -243,7 +247,6 @@ function PdfAnnotatorModal({
     }
   };
 
-  // توليد PDF معدل باستخدام scale=1 للحصول على أبعاد أصلية
   const generateModifiedPDFInBrowser = async () => {
     let hasAnnotations = false;
     for (const page in allStrokes) {
@@ -266,27 +269,23 @@ function PdfAnnotatorModal({
 
       for (let i = 1; i <= totalPages; i++) {
         const page = await pdf.getPage(i);
-        // استخدام scale=1 للحصول على الأبعاد الأصلية
         const viewport = page.getViewport({ scale: 1 });
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
         canvas.width = viewport.width;
         canvas.height = viewport.height;
 
-        // رسم الصفحة
         const renderContext = {
           canvasContext: context,
           viewport: viewport
         };
         await page.render(renderContext).promise;
 
-        // رسم التعديلات
         const strokes = allStrokes[i] || [];
         if (strokes.length > 0) {
           drawStrokesOnCanvas(canvas, strokes, canvas.width, canvas.height, false);
         }
 
-        // تحويل إلى صورة ودمج
         const imageData = canvas.toDataURL('image/png');
         const imageBytes = await fetch(imageData).then(res => res.arrayBuffer());
         const image = await newPdfDoc.embedPng(imageBytes);
@@ -406,7 +405,8 @@ function PdfAnnotatorModal({
               }}
               width={size.width}
               height={size.height}
-              className="absolute top-0 left-0 touch-none"
+              // ✅ التحكم في التمرير: إذا كان وضع الرسم مفعل نمنع التمرير (touch-none)، وإلا نسمح به (pointer-events-none)
+              className={`absolute top-0 left-0 ${isDrawingMode ? 'touch-none' : 'pointer-events-none'}`}
               style={{ cursor: tool === 'eraser' ? 'cell' : 'crosshair', background: 'transparent' }}
               onMouseDown={(e) => handlePointerDown(e, p)}
               onMouseMove={(e) => handlePointerMove(e, p)}
@@ -430,6 +430,16 @@ function PdfAnnotatorModal({
           <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
             {canAnnotate && (
               <>
+                {/* ✅ زر التبديل بين وضع القراءة ووضع الرسم (للهاتف) */}
+                <button
+                  onClick={() => setIsDrawingMode(!isDrawingMode)}
+                  className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition ${isDrawingMode ? 'bg-blue-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}
+                  title={isDrawingMode ? 'Passer en mode lecture (défiler)' : 'Passer en mode dessin'}
+                >
+                  {isDrawingMode ? <Pencil size={14} /> : <Hand size={14} />}
+                  <span className="hidden sm:inline">{isDrawingMode ? 'Dessin' : 'Lecture'}</span>
+                </button>
+
                 <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 rounded-lg p-1">
                   <button onClick={() => setTool('pen')} className={`p-1.5 rounded ${tool === 'pen' ? 'bg-blue-600 text-white' : 'text-slate-500'}`} title="Stylo"><Pen size={16} /></button>
                   <button onClick={() => setTool('highlighter')} className={`p-1.5 rounded ${tool === 'highlighter' ? 'bg-blue-600 text-white' : 'text-slate-500'}`} title="Surligneur"><Highlighter size={16} /></button>
