@@ -260,7 +260,7 @@ function PdfAnnotatorModal({
     }
   };
 
-  const generateModifiedPDFInBrowser = async () => {
+    const generateModifiedPDFInBrowser = async () => {
     let hasAnnotations = false;
     for (const page in allStrokes) {
       if (allStrokes[page] && allStrokes[page].length > 0) {
@@ -282,28 +282,36 @@ function PdfAnnotatorModal({
 
       for (let i = 1; i <= totalPages; i++) {
         const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale: 1 });
+        
+        // ✅ التعديل هنا: زيادة دقة الرسم لتصبح الصورة واضحة جداً
+        const originalViewport = page.getViewport({ scale: 1 });
+        const renderViewport = page.getViewport({ scale: 2.5 }); // زيادة الدقة إلى 2.5 أضعاف
+
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
-        canvas.width = viewport.width;
-        canvas.height = viewport.height;
+        canvas.width = renderViewport.width;
+        canvas.height = renderViewport.height;
 
         const renderContext = {
           canvasContext: context,
-          viewport: viewport
+          viewport: renderViewport // استخدام العرض عالي الدقة
         };
         await page.render(renderContext).promise;
 
         const strokes = allStrokes[i] || [];
         if (strokes.length > 0) {
+          // دالة رسم الخطوط ستتكيف تلقائياً مع الحجم الجديد
           drawStrokesOnCanvas(canvas, strokes, canvas.width, canvas.height, false);
         }
 
-        const imageData = canvas.toDataURL('image/png');
+        // ✅ استخدام صيغة JPEG بجودة عالية لتقليل حجم الملف مع الحفاظ على الوضوح
+        const imageData = canvas.toDataURL('image/jpeg', 0.92); 
         const imageBytes = await fetch(imageData).then(res => res.arrayBuffer());
-        const image = await newPdfDoc.embedPng(imageBytes);
-        const newPage = newPdfDoc.addPage([viewport.width, viewport.height]);
-        newPage.drawImage(image, { x: 0, y: 0, width: viewport.width, height: viewport.height });
+        const image = await newPdfDoc.embedJpg(imageBytes); // embedJpg بدلاً من embedPng
+        
+        // إضافة الصفحة بالحجم الأصلي (لكي لا يتضخم حجم ملف الـ PDF نفسه)
+        const newPage = newPdfDoc.addPage([originalViewport.width, originalViewport.height]);
+        newPage.drawImage(image, { x: 0, y: 0, width: originalViewport.width, height: originalViewport.height });
       }
 
       const pdfBytesModified = await newPdfDoc.save();
