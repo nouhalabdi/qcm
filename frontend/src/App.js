@@ -265,7 +265,7 @@ function App() {
     }
   });
 
-  // Vérification automatique de la session au démarrage
+  // ✅ Vérification automatique de la session au démarrage (Mise à jour PWA)
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token && user) {
@@ -273,7 +273,13 @@ function App() {
         headers: { 'Authorization': `Bearer ${token}` }
       })
         .then(res => {
-          if (!res.ok) throw new Error('Session invalide');
+          // إذا كان التوكن غير صالح فعلاً (401 أو 403) نرمي خطأ
+          if (res.status === 401 || res.status === 403) {
+            throw new Error('UNAUTHORIZED');
+          }
+          if (!res.ok) {
+            throw new Error('SERVER_ERROR');
+          }
           return res.json();
         })
         .then(data => {
@@ -281,10 +287,16 @@ function App() {
           setUser(data);
         })
         .catch(err => {
-          console.error('Session expirée:', err);
-          localStorage.removeItem('user');
-          localStorage.removeItem('token');
-          setUser(null);
+          // ✅ التعديل: إذا كان الخطأ بسبب الشبكة (لا يوجد إنترنت) نبقيه مسجلاً
+          if (err.message === 'UNAUTHORIZED') {
+            console.error('Session expirée:', err);
+            localStorage.removeItem('user');
+            localStorage.removeItem('token');
+            setUser(null);
+          } else {
+            console.log('Mode hors-ligne : conservation de la session locale.');
+            // لا نفعل شيئاً، المستخدم سيبقى مسجلاً بالبيانات الموجودة في الـ localStorage
+          }
         });
     }
   }, []);
