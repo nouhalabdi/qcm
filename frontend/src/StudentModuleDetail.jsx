@@ -183,10 +183,14 @@ function StudentModuleDetail() {
       }
       yearsMap[exam.year].push(exam);
     });
-    const yearsList = Object.keys(yearsMap).map(year => ({
-      year,
-      exams: yearsMap[year]
-    }));
+    
+    const yearsList = Object.keys(yearsMap)
+      .sort((a, b) => b.localeCompare(a))
+      .map(year => ({
+        year,
+        exams: yearsMap[year]
+      }));
+
     setYearQCMsList(yearsList);
     setShowYearQCMs(true);
   };
