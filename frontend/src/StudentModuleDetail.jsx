@@ -260,19 +260,14 @@ function StudentModuleDetail() {
     return { originalFiles, modifiedFiles, aiFiles, aiSummary, iaQuizzes: iaQuizzesForLesson };
   };
 
-  const handleModifiedSaved = (newUrl) => {
+    const handleModifiedSaved = (newUrl) => {
     const secureUrl = ensureHttps(newUrl);
     setCustomFiles(prev => {
       const filtered = prev.filter(f =>
         !(f.originalLessonId?.toString() === editingLessonId?.toString() && f.year === editingYear)
       );
-      const updated = [...filtered, { fileUrl: secureUrl, originalLessonId: editingLessonId, year: editingYear }];
-      fetch('https://reussite-qcmss-1nc7.onrender.com/api/users/custom-files', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId, customFiles: updated })
-      }).catch(err => console.error('Erreur mise à jour customFiles sur serveur', err));
-      return updated;
+    
+      return [...filtered, { fileUrl: secureUrl, originalLessonId: editingLessonId, year: editingYear }];
     });
     setEditingLessonId(null);
     setEditingYear(null);
