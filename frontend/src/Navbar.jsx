@@ -60,7 +60,8 @@ function Navbar({ darkMode, toggleDarkMode, notifications, onNotificationClick }
           </div>
         </Link>
 
-        <div className="hidden md:flex items-center gap-6 text-base font-medium">
+        {/* ✅ تغيير md إلى lg لإخفاء القائمة على التابلت وإظهارها فقط على الشاشات الكبيرة */}
+        <div className="hidden lg:flex items-center gap-5 text-sm xl:text-base font-medium">
           {isLoggedIn ? (
             <>
               <NavLink to="/" className={({ isActive }) => isActive ? activeClass : normalClass}>Accueil</NavLink>
@@ -81,7 +82,8 @@ function Navbar({ darkMode, toggleDarkMode, notifications, onNotificationClick }
         </div>
 
         <div className="flex items-center gap-4">
-          <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="md:hidden p-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition">
+          {/* ✅ تغيير md إلى lg */}
+          <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="lg:hidden p-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition">
             {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
           </button>
 
@@ -130,20 +132,22 @@ function Navbar({ darkMode, toggleDarkMode, notifications, onNotificationClick }
             </div>
           )}
           
+          {/* ✅ تغيير md إلى lg */}
           {isLoggedIn ? (
-            <button onClick={handleLogout} className="hidden md:block px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-md transition">
+            <button onClick={handleLogout} className="hidden lg:block px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-md transition">
               Se déconnecter
             </button>
           ) : (
-            <Link to="/auth" className="hidden md:block px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-md transition">
+            <Link to="/auth" className="hidden lg:block px-5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg shadow-md transition">
               Se connecter
             </Link>
           )}
         </div>
       </div>
 
+      {/* ✅ تغيير md إلى lg */}
       {isMenuOpen && (
-        <div className="md:hidden absolute top-full left-0 w-full bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 shadow-lg p-4 z-50 flex flex-col gap-3">
+        <div className="lg:hidden absolute top-full left-0 w-full bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-800 shadow-lg p-4 z-50 flex flex-col gap-3">
           {isLoggedIn ? (
             <>
               <NavLink to="/" className="text-base font-medium text-black dark:text-white hover:text-blue-600 transition" onClick={() => setIsMenuOpen(false)}>Accueil</NavLink>
