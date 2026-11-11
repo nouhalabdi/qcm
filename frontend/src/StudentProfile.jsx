@@ -756,7 +756,7 @@ function StudentProfile() {
                       const moduleId = getIdStr(lesson.moduleId);
                       return (
                         <div key={lesson._id} className="flex items-center justify-between text-sm p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-                          <span className="text-slate-700 dark:text-slate-300 truncate">
+                          <span className="text-slate-700 dark:text-slate-300 truncate break-words whitespace-normal">
                             {lesson.title || 'Cours sans titre'}
                             {moduleName && <span className="text-xs text-blue-600 ml-1">({moduleName})</span>}
                           </span>
@@ -857,7 +857,7 @@ function StudentProfile() {
                         <div key={mod._id} className="flex items-center justify-between text-sm p-2 bg-orange-50 dark:bg-orange-900/20 rounded-lg gap-2">
                           <div className="flex items-center gap-2 min-w-0">
                             <span className={`flex-shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded ${semColor}`}>{semLabel}</span>
-                            <span className="text-slate-700 dark:text-slate-300 truncate">{mod.title}</span>
+                            <span className="text-slate-700 dark:text-slate-300 truncate break-words whitespace-normal">{mod.title}</span>
                           </div>
                           <button
                             onClick={() => navigate(`/cours/module/${mod._id}`)}
