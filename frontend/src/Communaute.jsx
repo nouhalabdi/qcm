@@ -54,6 +54,9 @@ function Communaute() {
         }
 
         const studentsData = await studentsRes.json();
+
+const approvedStudents = studentsData.filter(student => student.isSubscribed === true);
+setStudents(approvedStudents);
         const groupsData = await groupsRes.json();
 
         // ✅ On ne pose les données que si la requête n'a pas été annulée
