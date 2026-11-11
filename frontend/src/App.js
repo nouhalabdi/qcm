@@ -171,7 +171,6 @@ function AppContent({ darkMode, toggleDarkMode, user }) {
     if (user?.role === 'admin') {
       navigate('/admin/dashboard/students');
     } else if (notif.conversationType === 'lesson' && notif.data?.lessonId && notif.data?.moduleId) {
-      // ✅ التوجيه إلى الدرس المحدد
       navigate(`/cours/module/${notif.data.moduleId}?lessonId=${notif.data.lessonId}`);
       removeNotification(notif.id);
     } else if (notif.conversationType === 'system') {
@@ -250,7 +249,6 @@ function AppContent({ darkMode, toggleDarkMode, user }) {
 function App() {
   const [darkMode, setDarkMode] = useState(false);
 
-  // Lecture sécurisée du localStorage pour l'utilisateur
   const [user, setUser] = useState(() => {
     const storedUser = localStorage.getItem('user');
     if (!storedUser) return null;
@@ -265,7 +263,6 @@ function App() {
     }
   });
 
-  // ✅ Vérification automatique de la session au démarrage (Mise à jour PWA)
   useEffect(() => {
     const token = localStorage.getItem('token');
     if (token && user) {
@@ -273,7 +270,6 @@ function App() {
         headers: { 'Authorization': `Bearer ${token}` }
       })
         .then(res => {
-          // إذا كان التوكن غير صالح فعلاً (401 أو 403) نرمي خطأ
           if (res.status === 401 || res.status === 403) {
             throw new Error('UNAUTHORIZED');
           }
@@ -287,21 +283,19 @@ function App() {
           setUser(data);
         })
         .catch(err => {
-          // ✅ التعديل: إذا كان الخطأ بسبب الشبكة (لا يوجد إنترنت) نبقيه مسجلاً
+         
           if (err.message === 'UNAUTHORIZED') {
             console.error('Session expirée:', err);
             localStorage.removeItem('user');
             localStorage.removeItem('token');
             setUser(null);
           } else {
-            console.log('Mode hors-ligne : conservation de la session locale.');
-            // لا نفعل شيئاً، المستخدم سيبقى مسجلاً بالبيانات الموجودة في الـ localStorage
+            console.log('Mode hors-ligne ou serveur lent : conservation de la session locale.');
           }
         });
     }
   }, []);
 
-  // Appliquer le mode sombre
   useEffect(() => {
     if (darkMode) document.documentElement.classList.add('dark');
     else document.documentElement.classList.remove('dark');
