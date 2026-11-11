@@ -7,21 +7,21 @@ const Module = require('../models/Module');
 const Quiz = require('../models/Quiz');
 const { notifyUser } = require('../utils/notify');
 
-// 1. Liste des étudiants de la même année
 router.get('/students', async (req, res) => {
   try {
     const { year, userId } = req.query;
     if (!year) return res.status(400).json({ message: 'Année manquante.' });
-    const filter = { role: { $ne: 'admin' }, year };
+    
+    const filter = { role: { $ne: 'admin' }, year, isSubscribed: true };
     if (userId) filter._id = { $ne: userId };
-    const students = await User.find(filter).select('username pseudo year email createdAt');
+    
+    const students = await User.find(filter).select('username pseudo year email createdAt isSubscribed');
     res.json(students);
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 });
 
-// 2. Liste des modules (groupes) de la même année
 router.get('/modules-groups', async (req, res) => {
   try {
     const { year, semester } = req.query;
@@ -35,7 +35,6 @@ router.get('/modules-groups', async (req, res) => {
   }
 });
 
-// 3. Créer ou récupérer une conversation directe
 router.post('/conversations/direct', async (req, res) => {
   try {
     const { userId, otherUserId } = req.body;
@@ -56,7 +55,6 @@ router.post('/conversations/direct', async (req, res) => {
   }
 });
 
-// 4. Créer ou récupérer une conversation de groupe pour un module
 router.get('/conversations/module/:moduleId', async (req, res) => {
   try {
     let conv = await Conversation.findOne({ type: 'group', moduleId: req.params.moduleId });
@@ -72,18 +70,13 @@ router.get('/conversations/module/:moduleId', async (req, res) => {
   }
 });
 
-// 4bis. Créer ou récupérer une conversation pour UNE question précise d'un QCM
-// ✅ CHANGEMENT : la discussion est maintenant scopée à quizId + questionIndex.
-// Avant, seul quizId était utilisé => une seule discussion était partagée par
-// TOUTES les questions du QCM. On exige donc questionIndex en query param ;
-// chaque question du QCM obtient ainsi sa propre conversation dédiée.
 router.get('/conversations/quiz/:quizId', async (req, res) => {
   try {
     const { quizId } = req.params;
     const { questionIndex } = req.query;
 
     if (questionIndex === undefined || questionIndex === null || questionIndex === '') {
-      return res.status(400).json({ message: 'questionIndex manquant : la discussion doit être liée à une question précise.' });
+      return res.status(400).json({ message: 'questionIndex manquant.' });
     }
     const qIndex = parseInt(questionIndex, 10);
     if (Number.isNaN(qIndex)) {
@@ -95,7 +88,7 @@ router.get('/conversations/quiz/:quizId', async (req, res) => {
       const quiz = await Quiz.findById(quizId).populate('moduleId');
       if (!quiz) return res.status(404).json({ message: 'Quiz non trouvé.' });
       if (qIndex < 0 || qIndex >= (quiz.questions || []).length) {
-        return res.status(400).json({ message: 'questionIndex hors limites pour ce QCM.' });
+        return res.status(400).json({ message: 'questionIndex hors limites.' });
       }
       conv = new Conversation({
         type: 'quiz',
@@ -112,7 +105,6 @@ router.get('/conversations/quiz/:quizId', async (req, res) => {
   }
 });
 
-// 5. Liste des conversations de l'utilisateur
 router.get('/conversations', async (req, res) => {
   try {
     const { userId } = req.query;
@@ -146,7 +138,6 @@ router.get('/conversations', async (req, res) => {
         const other = conv.participants.find(p => p._id.toString() !== userId);
         displayTitle = other ? (other.pseudo || other.username) : 'Utilisateur';
       } else if (conv.type === 'quiz' && conv.quizId) {
-        // ✅ affiche le numéro de la question concernée dans le titre de la conversation
         const qLabel = (conv.questionIndex !== undefined && conv.questionIndex !== null) ? ` - Q${conv.questionIndex + 1}` : '';
         displayTitle = `💬 ${conv.quizId.title || 'QCM'}${qLabel}`;
       }
@@ -170,7 +161,6 @@ router.get('/conversations', async (req, res) => {
   }
 });
 
-// 6. Récupérer les messages d'une conversation
 router.get('/messages/:conversationId', async (req, res) => {
   try {
     const messages = await Message.find({ conversationId: req.params.conversationId })
@@ -182,7 +172,6 @@ router.get('/messages/:conversationId', async (req, res) => {
   }
 });
 
-// 7. Envoyer un message
 router.post('/messages', async (req, res) => {
   try {
     const { conversationId, senderId, text, attachments } = req.body;
@@ -230,7 +219,6 @@ router.post('/messages', async (req, res) => {
   }
 });
 
-// 8. Ajouter / Retirer un like
 router.put('/messages/:messageId/like', async (req, res) => {
   try {
     const { userId } = req.body;
@@ -246,14 +234,12 @@ router.put('/messages/:messageId/like', async (req, res) => {
   }
 });
 
-// ✅ 9. Marquer une conversation comme lue (معالج الأخطاء 500)
 router.put('/conversations/:conversationId/read', async (req, res) => {
   try {
     const { userId } = req.body;
     const user = await User.findById(userId);
     if (!user) return res.status(404).json({ message: 'Utilisateur non trouvé.' });
     
-    // تأكد من أن المصفوفة موجودة لتجنب خطأ 500
     if (!user.lastReadConversations) user.lastReadConversations = [];
     
     const existing = user.lastReadConversations.find(r => r.conversationId.toString() === req.params.conversationId);
@@ -267,7 +253,6 @@ router.put('/conversations/:conversationId/read', async (req, res) => {
   }
 });
 
-// 10. Compter le nombre total de messages non lus
 router.get('/unread-count', async (req, res) => {
   try {
     const { userId } = req.query;
@@ -296,34 +281,26 @@ router.get('/unread-count', async (req, res) => {
   }
 });
 
-// ✅ إضافة مسار حذف الرسالة (حل مشكلة 404)
 router.delete('/messages/:messageId', async (req, res) => {
   try {
     const { messageId } = req.params;
     const { userId } = req.body;
     
-    // 1. البحث عن الرسالة
     const message = await Message.findById(messageId);
     if (!message) {
-      return res.status(404).json({ message: 'الرسالة غير موجودة.' });
+      return res.status(404).json({ message: 'Message non trouvé.' });
     }
 
-    // 2. التحقق من أن المستخدم الحالي هو الكاتب (أو الأدمن)
     if (message.senderId.toString() !== userId) {
-      return res.status(403).json({ message: 'لا يمكنك حذف رسالة ليست لك.' });
+      return res.status(403).json({ message: 'Non autorisé à supprimer ce message.' });
     }
 
-    // 3. حذف الرسالة
     await Message.findByIdAndDelete(messageId);
 
-    // 4. إعلام المتصلين عبر Socket.io بحذف الرسالة (اختياري)
-    // const io = req.app.get('io');
-    // io.to(message.conversationId).emit('message-deleted', { messageId });
-
-    res.status(200).json({ message: 'تم حذف الرسالة بنجاح.' });
+    res.status(200).json({ message: 'Message supprimé avec succès.' });
   } catch (err) {
     console.error('Erreur lors de la suppression du message:', err);
-    res.status(500).json({ message: 'خطأ في الخادم أثناء الحذف.' });
+    res.status(500).json({ message: 'Erreur serveur lors de la suppression.' });
   }
 });
 
