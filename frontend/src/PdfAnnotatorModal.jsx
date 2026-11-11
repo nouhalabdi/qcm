@@ -138,12 +138,10 @@ function PdfAnnotatorModal({
     pages.forEach(p => redrawPage(Number(p)));
   }, [allStrokes, pageSizes, redrawPage]);
 
-  // ✅ استخدام useCallback لمنع الدوال من التغير وإجبار الصفحة على إعادة الرسم
   const onPageLoadSuccess = useCallback((page, pageNum) => {
     if (!mountedRef.current) return;
     const viewport = page.getViewport({ scale });
     setPageSizes(prev => {
-      // لا تقم بتحديث الحالة إذا كان الحجم لم يتغير لتجنب إعادة الرسم
       if (prev[pageNum]?.width === viewport.width && prev[pageNum]?.height === viewport.height) {
         return prev;
       }
@@ -169,7 +167,7 @@ function PdfAnnotatorModal({
     if (tool === 'eraser') {
       setAllStrokes(prev => {
         const strokes = (prev[pageNum] || []).filter(s => {
-          if (!s || !s.points) return false; // ✅ إصلاح خطأ (Cannot read properties of null)
+          if (!s || !s.points) return false; 
           return !s.points.some(p => Math.hypot(p.x - pt.x, p.y - pt.y) < 0.02);
         });
         return { ...prev, [pageNum]: strokes };
@@ -189,7 +187,7 @@ function PdfAnnotatorModal({
     if (tool === 'eraser') {
       setAllStrokes(prev => {
         const strokes = (prev[pageNum] || []).filter(s => {
-          if (!s || !s.points) return false; // ✅ إصلاح خطأ (Cannot read properties of null)
+          if (!s || !s.points) return false; 
           return !s.points.some(p => Math.hypot(p.x - pt.x, p.y - pt.y) < 0.02);
         });
         return { ...prev, [pageNum]: strokes };
@@ -260,7 +258,7 @@ function PdfAnnotatorModal({
     }
   };
 
-    const generateModifiedPDFInBrowser = async () => {
+  const generateModifiedPDFInBrowser = async () => {
     let hasAnnotations = false;
     for (const page in allStrokes) {
       if (allStrokes[page] && allStrokes[page].length > 0) {
@@ -283,9 +281,8 @@ function PdfAnnotatorModal({
       for (let i = 1; i <= totalPages; i++) {
         const page = await pdf.getPage(i);
         
-        // ✅ التعديل هنا: زيادة دقة الرسم لتصبح الصورة واضحة جداً
         const originalViewport = page.getViewport({ scale: 1 });
-        const renderViewport = page.getViewport({ scale: 2.5 }); // زيادة الدقة إلى 2.5 أضعاف
+        const renderViewport = page.getViewport({ scale: 2.5 }); 
 
         const canvas = document.createElement('canvas');
         const context = canvas.getContext('2d');
@@ -294,22 +291,19 @@ function PdfAnnotatorModal({
 
         const renderContext = {
           canvasContext: context,
-          viewport: renderViewport // استخدام العرض عالي الدقة
+          viewport: renderViewport 
         };
         await page.render(renderContext).promise;
 
         const strokes = allStrokes[i] || [];
         if (strokes.length > 0) {
-          // دالة رسم الخطوط ستتكيف تلقائياً مع الحجم الجديد
           drawStrokesOnCanvas(canvas, strokes, canvas.width, canvas.height, false);
         }
 
-        // ✅ استخدام صيغة JPEG بجودة عالية لتقليل حجم الملف مع الحفاظ على الوضوح
         const imageData = canvas.toDataURL('image/jpeg', 0.92); 
         const imageBytes = await fetch(imageData).then(res => res.arrayBuffer());
-        const image = await newPdfDoc.embedJpg(imageBytes); // embedJpg بدلاً من embedPng
+        const image = await newPdfDoc.embedJpg(imageBytes); 
         
-        // إضافة الصفحة بالحجم الأصلي (لكي لا يتضخم حجم ملف الـ PDF نفسه)
         const newPage = newPdfDoc.addPage([originalViewport.width, originalViewport.height]);
         newPage.drawImage(image, { x: 0, y: 0, width: originalViewport.width, height: originalViewport.height });
       }
@@ -525,12 +519,19 @@ function PdfAnnotatorModal({
             </Document>
           </div>
         </div>
-        {!loadingPdf && numPages && numPages > 1 && !pdfError && (
+       
+        {!loadingPdf && numPages && !pdfError && (
           <div className="flex items-center justify-center flex-wrap gap-2 sm:gap-4 p-2 sm:p-3 border-t border-slate-200 dark:border-slate-700">
-            <button onClick={() => setPageNumber(p => Math.max(1, p - 1))} disabled={pageNumber <= 1} className="p-2 bg-slate-100 dark:bg-slate-700 rounded-full disabled:opacity-30"><ChevronLeft size={18} /></button>
-            <span className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 min-w-[70px] sm:min-w-[80px] text-center">Page {pageNumber} / {numPages}</span>
-            <button onClick={() => setPageNumber(p => Math.min(numPages, p + 1))} disabled={pageNumber >= numPages} className="p-2 bg-slate-100 dark:bg-slate-700 rounded-full disabled:opacity-30"><ChevronRight size={18} /></button>
-            <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1 sm:mx-2 hidden sm:block" />
+           
+            {numPages > 1 && (
+              <>
+                <button onClick={() => setPageNumber(p => Math.max(1, p - 1))} disabled={pageNumber <= 1} className="p-2 bg-slate-100 dark:bg-slate-700 rounded-full disabled:opacity-30"><ChevronLeft size={18} /></button>
+                <span className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 min-w-[70px] sm:min-w-[80px] text-center">Page {pageNumber} / {numPages}</span>
+                <button onClick={() => setPageNumber(p => Math.min(numPages, p + 1))} disabled={pageNumber >= numPages} className="p-2 bg-slate-100 dark:bg-slate-700 rounded-full disabled:opacity-30"><ChevronRight size={18} /></button>
+                <div className="w-px h-6 bg-slate-200 dark:bg-slate-700 mx-1 sm:mx-2 hidden sm:block" />
+              </>
+            )}
+           
             <button onClick={() => setScale(s => Math.max(0.6, s - 0.2))} className="p-2 bg-slate-100 dark:bg-slate-700 rounded-full"><ZoomOut size={16} /></button>
             <button onClick={() => setScale(s => Math.min(2.5, s + 0.2))} className="p-2 bg-slate-100 dark:bg-slate-700 rounded-full"><ZoomIn size={16} /></button>
           </div>
