@@ -11,12 +11,31 @@ function StudentModuleDetail() {
   const user = JSON.parse(localStorage.getItem('user'));
   const userId = user?._id;
 
-  const [moduleTitle, setModuleTitle] = useState('');
-  const [moduleImage, setModuleImage] = useState('');
-  const [lessons, setLessons] = useState([]);
-  const [exams, setExams] = useState([]);
-  const [iaQuizzes, setIaQuizzes] = useState([]);
-  const [loading, setLoading] = useState(true);
+  // ✅ إعدادات التخزين المؤقت
+  const CACHE_KEY = `module_detail_${moduleId}_${userId}`;
+  
+  const loadFromCache = () => {
+    try {
+      const cached = localStorage.getItem(CACHE_KEY);
+      if (cached) {
+        const { data, timestamp } = JSON.parse(cached);
+        // صلاحية الكاش سنة كاملة
+        if (Date.now() - timestamp < 365 * 24 * 60 * 60 * 1000) {
+          return data;
+        }
+      }
+    } catch (e) {}
+    return null;
+  };
+
+  const cachedData = loadFromCache();
+
+  const [moduleTitle, setModuleTitle] = useState(cachedData?.moduleTitle || '');
+  const [moduleImage, setModuleImage] = useState(cachedData?.moduleImage || '');
+  const [lessons, setLessons] = useState(cachedData?.lessons || []);
+  const [exams, setExams] = useState(cachedData?.exams || []);
+  const [iaQuizzes, setIaQuizzes] = useState(cachedData?.iaQuizzes || []);
+  const [loading, setLoading] = useState(!cachedData); // إذا كان هناك كاش، لا نظهر شاشة التحميل
   const [error, setError] = useState(null);
 
   const [selectedLang, setSelectedLang] = useState('fr');
@@ -24,7 +43,6 @@ function StudentModuleDetail() {
   const [selectedYear, setSelectedYear] = useState(null);
   const [showYearPicker, setShowYearPicker] = useState(false);
 
-  // ✅ حالات لإدارة نوافذ QCMs
   const [showQCMTypeModal, setShowQCMTypeModal] = useState(false);
   const [showLessonQCMs, setShowLessonQCMs] = useState(false);
   const [lessonQCMs, setLessonQCMs] = useState([]);
@@ -36,8 +54,8 @@ function StudentModuleDetail() {
   const [pdfViewer, setPdfViewer] = useState(null);
   const [videoPlayer, setVideoPlayer] = useState(null);
 
-  const [readLessons, setReadLessons] = useState([]);
-  const [customFiles, setCustomFiles] = useState([]);
+  const [readLessons, setReadLessons] = useState(cachedData?.readLessons || []);
+  const [customFiles, setCustomFiles] = useState(cachedData?.customFiles || []);
   const [editingLessonId, setEditingLessonId] = useState(null);
   const [editingYear, setEditingYear] = useState(null);
 
@@ -64,7 +82,10 @@ function StudentModuleDetail() {
         return;
       }
 
-      setLoading(true);
+      // لا نغير حالة التحميل إلى true إذا كان لدينا بيانات محفوظة (كاش)
+      if (!cachedData) {
+        setLoading(true);
+      }
       setError(null);
 
       try {
@@ -92,9 +113,6 @@ function StudentModuleDetail() {
         if (!lesRes.ok) throw new Error(`Erreur leçons: ${lesRes.status}`);
         if (!examRes.ok) throw new Error(`Erreur examens: ${examRes.status}`);
         if (!iaRes.ok) throw new Error(`Erreur IA: ${iaRes.status}`);
-        if (statsUrl && statsRes && !statsRes.ok) {
-          console.warn("⚠️ Erreur statistiques, on continue sans.");
-        }
 
         const modData = await modRes.json();
         const lesData = await lesRes.json();
@@ -102,36 +120,58 @@ function StudentModuleDetail() {
         const iaData = await iaRes.json();
 
         if (isMounted) {
+          const sortedLessons = lesData.sort((a, b) => a.order - b.order);
+          const filteredExams = examData.filter(e => !e.isIA);
+
           setModuleTitle(modData.title || 'Module sans titre');
           setModuleImage(modData.imageUrl || '');
-          setLessons(lesData.sort((a, b) => a.order - b.order));
-          setExams(examData.filter(e => !e.isIA));
+          setLessons(sortedLessons);
+          setExams(filteredExams);
           setIaQuizzes(iaData);
+
+          let currentReadLessons = [];
+          let currentCustomFiles = [];
 
           if (statsUrl && statsRes && statsRes.ok) {
             const statsData = await statsRes.json();
-            const readLessonIds = (statsData.readLessons || [])
+            currentReadLessons = (statsData.readLessons || [])
               .map(r => r.lessonId?._id?.toString() || r.lessonId?.toString())
               .filter(Boolean);
-            setReadLessons(readLessonIds);
+            setReadLessons(currentReadLessons);
+            
             const uniqueFiles = {};
             (statsData.customFiles || []).forEach(f => {
               const key = `${f.originalLessonId?.toString()}-${f.year}`;
               uniqueFiles[key] = f;
             });
-            setCustomFiles(Object.values(uniqueFiles));
-          } else {
-            setReadLessons([]);
-            setCustomFiles([]);
+            currentCustomFiles = Object.values(uniqueFiles);
+            setCustomFiles(currentCustomFiles);
           }
+
+          // ✅ حفظ البيانات في الكاش لكي تفتح الصفحة فوراً في المرة القادمة
+          const dataToCache = {
+            moduleTitle: modData.title || 'Module sans titre',
+            moduleImage: modData.imageUrl || '',
+            lessons: sortedLessons,
+            exams: filteredExams,
+            iaQuizzes: iaData,
+            readLessons: currentReadLessons,
+            customFiles: currentCustomFiles
+          };
+          try {
+            localStorage.setItem(CACHE_KEY, JSON.stringify({ data: dataToCache, timestamp: Date.now() }));
+          } catch (e) { console.warn("Erreur sauvegarde cache", e); }
 
           setLoading(false);
         }
       } catch (err) {
         if (err.name !== 'AbortError' && isMounted) {
           console.error("❌ Erreur:", err);
-          setError(err.message);
-          setLoading(false);
+          // إذا حدث خطأ وكان لدينا كاش، لا نعرض شاشة الخطأ بل نترك البيانات القديمة تظهر
+          if (!cachedData) {
+            setError(err.message);
+            setLoading(false);
+          }
         }
       }
     };
@@ -142,14 +182,23 @@ function StudentModuleDetail() {
       isMounted = false;
       abortController.abort();
     };
-  }, [moduleId, userId]);
+  }, [moduleId, userId]); // قمنا بإزالة cachedData من هنا لأننا نستخدمها فقط في التشغيل الأول
 
   const isLessonRead = (lessonId) => readLessons.includes(lessonId);
 
   const toggleReadStatus = async (lessonId) => {
     if (!userId) return;
     const isRead = isLessonRead(lessonId);
-    setReadLessons(prev => isRead ? prev.filter(id => id !== lessonId) : [...prev, lessonId]);
+    
+    // تحديث الواجهة فوراً
+    const updatedReadLessons = isRead ? readLessons.filter(id => id !== lessonId) : [...readLessons, lessonId];
+    setReadLessons(updatedReadLessons);
+
+    // تحديث الكاش
+    if (cachedData) {
+      const newCacheData = { ...cachedData, readLessons: updatedReadLessons };
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ data: newCacheData, timestamp: Date.now() }));
+    }
 
     try {
       const response = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/users/read/${lessonId}`, {
@@ -164,7 +213,8 @@ function StudentModuleDetail() {
     } catch (error) {
       console.error("Erreur mise à jour lecture:", error);
       alert("❌ Erreur réseau ou serveur.");
-      setReadLessons(prev => isRead ? [...prev, lessonId] : prev.filter(id => id !== lessonId));
+      // إرجاع الحالة السابقة في حال فشل الاتصال
+      setReadLessons(isRead ? [...readLessons, lessonId] : readLessons.filter(id => id !== lessonId));
     }
   };
 
@@ -173,7 +223,6 @@ function StudentModuleDetail() {
     setShowQCMTypeModal(true);
   };
 
-  // ---- QCM par année : afficher les années avec titres ----
   const handleYearQCMs = () => {
     setShowQCMTypeModal(false);
     const yearsMap = {};
@@ -195,13 +244,11 @@ function StudentModuleDetail() {
     setShowYearQCMs(true);
   };
 
-  // ---- QCM par cours : afficher les titres des QCMs (sans années) ----
   const handleLessonQCMs = async () => {
     setShowQCMTypeModal(false);
     setLessonQCMsLoading(true);
     setShowLessonQCMs(true);
     try {
-      // Récupérer tous les QCMs de type "lesson" pour ce module
       const res = await fetch(`https://reussite-qcmss-1nc7.onrender.com/api/quizzes?moduleId=${moduleId}&type=lesson&isIA=false`);
       const data = await res.json();
       setLessonQCMs(data);
@@ -213,7 +260,6 @@ function StudentModuleDetail() {
     }
   };
 
-  // ---- Fonctions existantes pour les catégories (cours, résumé, etc.) ----
   const getYearsForCategory = (category) => {
     const years = new Set();
     if (category === 'exams-year') {
@@ -260,15 +306,19 @@ function StudentModuleDetail() {
     return { originalFiles, modifiedFiles, aiFiles, aiSummary, iaQuizzes: iaQuizzesForLesson };
   };
 
-    const handleModifiedSaved = (newUrl) => {
+  const handleModifiedSaved = (newUrl) => {
     const secureUrl = ensureHttps(newUrl);
-    setCustomFiles(prev => {
-      const filtered = prev.filter(f =>
-        !(f.originalLessonId?.toString() === editingLessonId?.toString() && f.year === editingYear)
-      );
+    const updatedFiles = [
+      ...customFiles.filter(f => !(f.originalLessonId?.toString() === editingLessonId?.toString() && f.year === editingYear)),
+      { fileUrl: secureUrl, originalLessonId: editingLessonId, year: editingYear }
+    ];
+    setCustomFiles(updatedFiles);
+
+    if (cachedData) {
+      const newCacheData = { ...cachedData, customFiles: updatedFiles };
+      localStorage.setItem(CACHE_KEY, JSON.stringify({ data: newCacheData, timestamp: Date.now() }));
+    }
     
-      return [...filtered, { fileUrl: secureUrl, originalLessonId: editingLessonId, year: editingYear }];
-    });
     setEditingLessonId(null);
     setEditingYear(null);
   };
@@ -589,7 +639,7 @@ function StudentModuleDetail() {
               <button onClick={() => { setActiveCategory(null); setSelectedYear(null); }} className="text-xs text-red-500 hover:text-red-700">Fermer</button>
             </div>
 
-            {/* ---- CATÉGORIE COURS (قابل للتعديل، غير قابل للتحميل) ---- */}
+            {/* ---- CATÉGORIE COURS ---- */}
             {activeCategory === 'cours' && selectedYear && (
               <div className="space-y-4">
                 {(() => {
@@ -670,7 +720,7 @@ function StudentModuleDetail() {
               </div>
             )}
 
-            {/* ---- RÉSUMÉS (للقراءة فقط) ---- */}
+            {/* ---- RÉSUMÉS ---- */}
             {activeCategory === 'resume' && selectedYear && (
               <div className="space-y-3">
                 {(() => {
@@ -742,7 +792,7 @@ function StudentModuleDetail() {
               </div>
             )}
 
-            {/* ---- TD (للقراءة فقط، غير قابل للتعديل أو التحميل) ---- */}
+            {/* ---- TD ---- */}
             {activeCategory === 'td' && selectedYear && (
               <div className="space-y-3">
                 {(() => {
