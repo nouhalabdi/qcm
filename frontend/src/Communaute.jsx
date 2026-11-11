@@ -14,8 +14,6 @@ function Communaute() {
   const [loading, setLoading] = useState(true);
 
   const [semester, setSemester] = useState('Semestre 1');
-
-  // ✅ حالة المحادثة النشطة
   const [activeChat, setActiveChat] = useState(null);
 
   // ✅ 1. عند تحميل الصفحة أو تغيير الرابط، نقرأ المعطيات ونفتح الشات
@@ -54,14 +52,14 @@ function Communaute() {
         }
 
         const studentsData = await studentsRes.json();
-
-const approvedStudents = studentsData.filter(student => student.isSubscribed === true);
-setStudents(approvedStudents);
         const groupsData = await groupsRes.json();
 
-        // ✅ On ne pose les données que si la requête n'a pas été annulée
+        // ✅ الفلترة: عرض الطلاب المفعلين فقط
+        const approvedStudents = studentsData.filter(student => student.isSubscribed === true);
+
+        // ✅ تحديث الحالة مع التأكد من عدم إلغاء الطلب
         if (!abortController.signal.aborted) {
-          setStudents(studentsData);
+          setStudents(approvedStudents); // <--- تم التعديل هنا (حذف السطر القديم)
           setGroups(groupsData);
         }
       } catch (err) {
@@ -69,10 +67,6 @@ setStudents(approvedStudents);
           console.error(err);
         }
       } finally {
-        // ✅ CORRIGÉ : on arrête toujours le "Chargement...", qu'il y ait eu abort ou non.
-        // Avant, ce setLoading(false) était protégé par "if (!abortController.signal.aborted)",
-        // ce qui fait qu'en cas de double-exécution de l'effet (StrictMode) ou de tout autre
-        // abort inattendu, le spinner restait bloqué indéfiniment sur "Chargement...".
         setLoading(false);
       }
     };
